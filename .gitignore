@@ -6,3 +6,12 @@
 
 # rebar dependency files
 deps/*
+
+# ignore ebin folder
+# it must be generated
+# by rebar
+ebin/*
+
+# Application logs should
+# also be ignored
+log/*
