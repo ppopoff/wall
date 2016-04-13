@@ -1,5 +1,5 @@
 # vi(m) swap files
-.sw*
+*.sw*
 
 # bytecode files
 *.beam
