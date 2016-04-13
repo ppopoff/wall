@@ -30,18 +30,19 @@ Rebar is also included
 
 To compile the appilcation please use
 
-    rebar compile
+    ./rebar get-deps
+    ./rebar compile
 
 To remove artifacts from previous compilation use
 
-    rebar clean
+    ./rebar clean
 
 To run unit-tests that are now are not written
 
-    rebar eunit
+    ./rebar eunit
 
 To generate the documentatiion using EDoc
 
-    rebar doc
+    ./rebar doc
 
 
