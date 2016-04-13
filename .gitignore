@@ -4,3 +4,5 @@
 # bytecode files
 *.beam
 
+# rebar dependency files
+deps/*
