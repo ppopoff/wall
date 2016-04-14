@@ -27,19 +27,20 @@ run() ->
 start(_StartType, _StartArgs) ->
     lager:info("Starting the ranch listener"),
 
+    case wall_sup:start_link() of
+        {ok, Pid} -> lager:info("Supervisor started ~tp", Pid);
+        Error     -> lager:error("Unable to start supervisor"),
+                     Error
+    end,
+
     NumberOfAcceptors = 1,
     Port = 8000,
     Protocol = wall_protocol,
     Options = [{port, Port}, {max_connections, infinity}],
 
     {ok, _} = ranch:start_listener(
-        wall_tcp, NumberOfAcceptors, ranch_tcp, Options, Protocol, []),
+        wall_tcp, NumberOfAcceptors, ranch_tcp, Options, Protocol, []).
 
-    case wall_sup:start_link() of
-        {ok, Pid} -> {ok, Pid};
-        Error     -> lager:error("Unable to start supervisor"),
-                     Error
-    end.
 
 stop(_State) ->
     lager:info("Stopping the ranch listener"),
