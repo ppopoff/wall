@@ -55,15 +55,19 @@ find(UserName) ->
 %% ------------------------------------------------------------------
 
 init([]) ->
-    io:format("Creating a table"),
+    lager:info("Initializing the user storage..."),
+    lager:debug("Creating a table"),
     TableId = ets:new(storage, [private, set]),
-    io:format("this is my table_id: ~tp", [TableId]),
+    lager:debug("Creating a table"),
+    lager:debug("this is my table_id: ~tp", [TableId]),
     {ok, TableId}.
 
 terminate(Reason, TableId) ->
-    io:format("Stopping the table service~n"),
-    ets:delete(TableId),
-    io:format("Terminated by following reason: ~tp~n", [Reason]),
+    lager:info("Stopping the table service"),
+    lager:debug("Deleting the ~tp table", [TableId]),
+    Status =  ets:delete(TableId),
+    lager:debug("Done! ~tp", [Status]),
+    lager:debug("Terminated by following reason: ~tp~n", [Reason]),
     ok.
 
 
@@ -101,15 +105,17 @@ is_registered([_])   -> true.
 
 % Registers user with given name 
 register_user(TableId, UserName) when is_atom(UserName) ->
+    lager:info("Registering a new user..."),
     RegistrationDate = os:timestamp(),
     Status = ets:insert(TableId, {UserName, get_time_millis(RegistrationDate)}),
-    io:format("User ~tp registered at: ", [Status]),
-    io:format("~tp ~n", [RegistrationDate]),
+    lager:debug("User registration status ~tp", [Status]),
+    lager:info("User ~tp registered at: ~tp", [Status, RegistrationDate]),
     {ok, UserName, RegistrationDate}.
  
 
 % Returns name and registration date
 find_user(TableId, UserName) when is_atom(UserName) ->
+    lager:debug("Searching for user ~tp", [UserName]),
     ets:lookup(TableId, UserName).
 
 % Returns current time (since epoch) in milliseconds
