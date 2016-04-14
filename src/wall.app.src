@@ -1,12 +1,14 @@
 {application, wall,
  [
   {description, "A wall where anyone can post"},
-  {vsn, "0.1"},
-  {registered, []},
+  {vsn, "0.1.0"},
+  {registered, [wall]},
   {applications, [
                   kernel,
-                  stdlib
+                  stdlib,
+                  ranch,
+                  lager
                  ]},
-  {mod, { wall_app, []}},
+  {mod, { wall, []}},
   {env, []}
  ]}.
