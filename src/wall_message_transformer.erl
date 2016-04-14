@@ -26,7 +26,7 @@ decode_message(<<PackageLength:?HEADER/unsigned-big-integer, Rest/binary>>)->
 %% Endodes message payload using term_to_binary
 %% format
 -spec encode_message(term()) -> binary().
-encode_message(Term) when is_term(Term) ->
+encode_message(Term) ->
     BinaryRepresentation = term_to_binary(Term),
     LengthInBytes = byte_size(BinaryRepresentation),
     <<LengthInBytes:?HEADER/unsigned-big-integer, BinaryRepresentation/binary>>.
