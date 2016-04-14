@@ -16,7 +16,7 @@
 %% Comment: use internal functions to decode the payload data
 
 -spec decode_message(binary()) -> bitstring().
-decode_message(<<PackageLength:?HEADER/unsigned-big-integer, Rest/binary>>) ->
+decode_message(<<PackageLength:?HEADER/unsigned-big-integer, Rest/binary>>)->
     EncodedMessage = <<Rest:PackageLength/binary>>,
     DecodedMessage = binary_to_term(EncodedMessage),
     DecodedMessage.
@@ -26,7 +26,7 @@ decode_message(<<PackageLength:?HEADER/unsigned-big-integer, Rest/binary>>) ->
 %% Endodes message payload using term_to_binary
 %% format
 -spec encode_message(term()) -> binary().
-encode_message(Term) ->
+encode_message(Term) when is_term(Term) ->
     BinaryRepresentation = term_to_binary(Term),
     LengthInBytes = byte_size(BinaryRepresentation),
     <<LengthInBytes:?HEADER/unsigned-big-integer, BinaryRepresentation/binary>>.
