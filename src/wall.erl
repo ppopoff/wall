@@ -17,10 +17,10 @@ start(_StartType, _StartArgs) ->
     NumberOfAcceptors = 1,
     Port = 8000,
     Protocol = wall_protocol,
+    Options = [{port, Port}, {max_connections, infinity}, {active, once}],
 
-    %% Pay attention to [{active, once}]
     {ok, _} = ranch:start_listener(
-        wall_tcp, NumberOfAcceptors, ranch_tcp, [{port, Port}], Protocol, []),
+        wall_tcp, NumberOfAcceptors, ranch_tcp, Options, Protocol, []),
 
     case wall_sup:start_link() of
         {ok, Pid} -> {ok, Pid};
@@ -29,7 +29,9 @@ start(_StartType, _StartArgs) ->
     end.
 
 stop(_State) ->
-    lager:info("Shutting down the application~n"),
+    lager:info("Stopping the ranch listener"),
+    ranch:stop_listener(wall_tcp),
+    lager:info("Shutting down the application"),
     ok.
 
 shutdown() ->
