@@ -1,5 +1,5 @@
 #!/bin/bash
-erl -pa ebin deps/ranch/ebin deps/goldrush/ebin deps/lager/ebin
+# -s runs function: -s $MODULE $RUN
+# -pa CLASSPATH
+erl -pa ebin deps/ranch/ebin deps/goldrush/ebin deps/lager/ebin -s wall run
 
-# not working
-# erl -pa ebin deps/*/ebin
