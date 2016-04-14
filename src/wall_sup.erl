@@ -8,14 +8,14 @@
 %% Supervisor callbacks
 -export([init/1]).
 
-%% Helper macro for declaring children of supervisor
--define(CHILD(I, Type), {I, {I, start_link, []}, permanent, 5000, Type, [I]}).
 
 %% ===================================================================
 %% API functions
 %% ===================================================================
 
+-spec start_link() -> {ok, pid()}.
 start_link() ->
+    lager:info("Supervisor started"),
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 %% ===================================================================
@@ -23,5 +23,14 @@ start_link() ->
 %% ===================================================================
 
 init([]) ->
-    {ok, { {one_for_one, 5, 10}, []} }.
+    %% means that for each process that dies simply restart that
+    %% process without affecting any of the others
+    RestartStrategy        = one_for_one,
+    MaxRestarts            = 10,
+    MaxTimeBetweenRestarts = 10,
+
+    SupervisorFlags = {
+        RestartStrategy, MaxRestarts, MaxTimeBetweenRestarts},
+
+    {ok, {SupervisorFlags, []}}.
 
