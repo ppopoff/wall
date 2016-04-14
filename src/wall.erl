@@ -3,13 +3,26 @@
 -behaviour(application).
 
 %% Application callbacks
--export([start/2, shutdown/0, stop/1]).
+-export([start/2]).
+-export([run/0]).
+-export([shutdown/0]).
+-export([stop/1]).
 
 
 
 %% ===================================================================
 %% Application callbacks
 %% ===================================================================
+%%
+run() ->
+    application:ensure_all_started(ranch),
+    application:ensure_all_started(compiler),
+    application:ensure_all_started(syntax_tools),
+    application:ensure_all_started(goldrush),
+    application:ensure_all_started(lager),
+    application:ensure_all_started(wall),
+    ok.
+
 
 start(_StartType, _StartArgs) ->
     lager:info("Starting the ranch listener"),
@@ -17,7 +30,7 @@ start(_StartType, _StartArgs) ->
     NumberOfAcceptors = 1,
     Port = 8000,
     Protocol = wall_protocol,
-    Options = [{port, Port}, {max_connections, infinity}, {active, once}],
+    Options = [{port, Port}, {max_connections, infinity}],
 
     {ok, _} = ranch:start_listener(
         wall_tcp, NumberOfAcceptors, ranch_tcp, Options, Protocol, []),
