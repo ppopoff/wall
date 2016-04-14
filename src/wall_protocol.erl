@@ -29,9 +29,6 @@
 
 start_link(Ref, Socket, Transport, Opts) ->
     proc_lib:start_link(?MODULE, init, [Ref, Socket, Transport, Opts]).
-    %% Plain old and working version
-    %%Pid = spawn_link(?MODULE, init, [Ref, Socket, Transport, Opts]),
-    %%{ok, Pid}.
 
 
 init(Ref, Socket, Transport, _Opts = []) ->
@@ -39,20 +36,6 @@ init(Ref, Socket, Transport, _Opts = []) ->
     ok = ranch:accept_ack(Ref),
     ok = Transport:setopts(Socket, [{active, once}]),
     gen_server:enter_loop(?MODULE, [], #state{socket=Socket, transport=Transport},?TIMEOUT).
-    %% Plain old and working version
-    %ok = ranch:accept_ack(Ref),
-    %loop(Socket, Transport).
-
-
-%loop(Socket, Transport) ->
-%    case Transport:recv(Socket, 0, ?TIMEOUT) of
-%        {ok, Data} ->
-%            lager:info("echoing ~p", [Data]),
-%            Transport:send(Socket, Data),
-%            loop(Socket, Transport);
-%        _ ->
-%            ok = Transport:close(Socket)
-%    end.
 
 
 %% ------------------------------------------------------------------
