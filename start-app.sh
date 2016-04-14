@@ -1,5 +1,5 @@
 #!/bin/bash
-echo "In erlang console please write the following:"
-echo "Please run application:start(wall)."
+erl -pa ebin deps/ranch/ebin deps/goldrush/ebin deps/lager/ebin
 
-erl -pa /ebin /deps/*/ebin
+# not working
+# erl -pa ebin deps/*/ebin
