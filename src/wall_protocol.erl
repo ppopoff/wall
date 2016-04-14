@@ -21,7 +21,7 @@
          code_change/3
        ]).
 
-
+-define(AUTH_HEADER, 16).
 -define(TIMEOUT, 99999).
 
 -record(state, {socket, transport}).
@@ -36,6 +36,27 @@ init(Ref, Socket, Transport, _Opts = []) ->
     ok = ranch:accept_ack(Ref),
     ok = Transport:setopts(Socket, [{active, once}]),
     gen_server:enter_loop(?MODULE, [], #state{socket=Socket, transport=Transport},?TIMEOUT).
+
+
+%% authentication protocol
+%% first 2 bytes unsigned big endian integer length encoded
+%% username in bytes. Following N bytes are the username in
+%% erlang searilization format
+auth(Socket, Transport, <<Size:?AUTH_HEADER/unsigned-big-integer, Rest/bits>>) ->
+    <<UserNameBin:PackageLength/binary>> = Rest,
+    UserName = binary_to_term(UserNameBin),
+    lager:info("Auth request from user: ~tp", [UserName]),
+    case wall_users:exist(UserName) of
+        true  ->
+            lagger:info("User doesnt exist... Registration"),
+            wall_users:reg(UserName),
+            lagger:info("authenticated");
+        false ->
+            Transport:close()
+
+    lager:info("User authenticated! ~p~n", [Rest]),
+    Transport:send(Socket, <<"granted\r\n">>),
+    ok.
 
 
 %% ------------------------------------------------------------------
