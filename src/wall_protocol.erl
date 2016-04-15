@@ -24,7 +24,8 @@
 
 -define(AUTH_HEADER, 16).
 -define(SERVER, ?MODULE).
--define(TIMEOUT, 99999).
+% Unlimited timeout
+-define(TIMEOUT, 0).
 
 
 
@@ -38,21 +39,17 @@ stop() ->
 
 
 init([Ref, Socket, Transport, _Opts]) ->
-    % We don't care about the options
-    {ok, #state{ref=Ref, socket=Socket, transport=Transport}, 0}.
+    {ok, #state{ref=Ref, socket=Socket, transport=Transport}, ?TIMEOUT}.
 
 
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
-handle_info(timeout, State=#state{ref=Ref, socket=Socket, transport=Transport}) ->
-    ok = ranch:accept_ack(Ref),
-    ok = Transport:setopts(Socket, [{active, once}]),
-    {noreply, State};
+handle_info(timeout, State) -> auth(State);
 
 %% When message from client is received:
-handle_info({tcp, Socket, Data}, State=#state{ref=Ref, socket=Socket, transport=Transport}) ->
+handle_info({tcp, Socket, Data}, State=#state{ref=_Ref, socket=Socket, transport=Transport}) ->
     Transport:setopts(Socket, [{active, once}]),
     Transport:send(Socket, Data),
     %% TODO : return something usefull
@@ -96,23 +93,56 @@ code_change(_OldVsn, State, _Extra) ->
 %% first 2 bytes unsigned big endian integer length encoded
 %% username in bytes. Following N bytes are the username in
 %% erlang searilization format
-auth(Ref, Socket, Transport, <<Size:?AUTH_HEADER/unsigned-big-integer, Rest/bits>>) ->
+auth(State=#state{ref=Ref, socket=Socket, transport=Transport}) ->
+    ranch:accept_ack(Ref),
 
-    <<UserNameBin:Size/binary>> = Rest,
-    UserName = binary_to_term(UserNameBin),
-    lager:info("Auth request from user: ~tp", [UserName]),
+    % Prompt
+    Transport:send(Socket, <<"auth\n">>),
 
-    case wall_users:exist(UserName) of
-        true  ->
-            lager:info("User doesnt exist... Registration"),
-            %wall_users:reg(UserName),
-            lager:info("authenticated ~tp", [UserName]),
-            Transport:send(Socket, <<"granted">>),
-            gen_server:enter_loop(
-                ?MODULE, [], #state{ref=Ref, socket=Socket, transport=Transport}, ?TIMEOUT);
-        false ->
-            lager:info("authentication failed"),
-            error
+    % waiting for username
+    %ranch:accept_ack(Ref),
+
+    AuthenticationDelay = 30000, % 30 seconds to authenticate
+
+    case Transport:recv(Socket, 0, AuthenticationDelay) of
+        {ok, Data} ->
+            [Name, Rest] = binary:split(Data, <<"\r\n">>),
+            NameAtom = list_to_atom(binary_to_list(Name)),
+
+            lager:info("User with name ~tp is trying to authenticate", [NameAtom]),
+            lager:info("Checking username ~tp in the database", [NameAtom]),
+            case wall_users:exist(NameAtom) of
+                true ->
+                    lager:info("the following user exist"),
+                    {stop, normal, State};
+                false ->
+                    lager:info("no such user exist. Creating"),
+                    wall_users:reg(NameAtom),
+                    {noreply, State}
+            end;
+
+        {error, _} ->
+            lager:error("bad authentication data... Connection will be dropped"),
+            {stop, normal, State}
     end.
+
+
+
+%auth(Ref, Socket, Transport, <<Size:?AUTH_HEADER/unsigned-big-integer, Rest/bits>>) ->
+%    <<UserNameBin:Size/binary>> = Rest,
+%    UserName = binary_to_term(UserNameBin),
+%    lager:info("Auth request from user: ~tp", [UserName]),
+%    case wall_users:exist(UserName) of
+%        true  ->
+%            lager:info("User doesnt exist... Registration"),
+            %wall_users:reg(UserName),
+%            lager:info("authenticated ~tp", [UserName]),
+%            Transport:send(Socket, <<"granted">>),
+%            gen_server:enter_loop(
+%                ?MODULE, [], #state{ref=Ref, socket=Socket, transport=Transport}, ?TIMEOUT);
+%        false ->
+%            lager:info("authentication failed"),
+%            error
+%    end.
 
 
