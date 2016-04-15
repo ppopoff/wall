@@ -114,10 +114,10 @@ is_registered([_])   -> true.
 % Registers user with given name
 register_user(TableId, UserName) when is_atom(UserName) ->
     lager:info("Registering a new user..."),
-    RegistrationDate = os:timestamp(),
-    Status = ets:insert(TableId, {UserName, get_time_millis(RegistrationDate)}),
+    RegistrationDate = get_time_millis(os:timestamp()),
+    Status = ets:insert(TableId, {UserName, RegistrationDate}),
     lager:debug("User registration status ~tp", [Status]),
-    lager:info("User ~tp registered at: ~tp", [Status, RegistrationDate]),
+    lager:info("User ~tp registered ~tp", [UserName, RegistrationDate]),
     {ok, UserName, RegistrationDate}.
 
 
