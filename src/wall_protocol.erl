@@ -52,6 +52,11 @@ handle_info(timeout, State) -> auth(State);
 handle_info({tcp, Socket, Data}, State=#state{ref=_Ref, socket=Socket, transport=Transport}) ->
     Transport:setopts(Socket, [{active, once}]),
     Transport:send(Socket, Data),
+
+%TODO GET CURRENT PID IN REGISTRATION PROCESS AND PUT THEM IN ETC
+%GET ALL PIDS FROM GEN_SERRVER (self())
+%
+
     %% TODO : return something usefull
     %%io:format("~tp", [Data]),
     %%Transport:send(Socket, <<"OK\n">>),
@@ -107,17 +112,17 @@ auth(State=#state{ref=Ref, socket=Socket, transport=Transport}) ->
     case Transport:recv(Socket, 0, AuthenticationDelay) of
         {ok, Data} ->
             [Name, Rest] = binary:split(Data, <<"\r\n">>),
-            NameAtom = list_to_atom(binary_to_list(Name)),
+            CurrentProcessId = self(),
 
-            lager:info("User with name ~tp is trying to authenticate", [NameAtom]),
-            lager:info("Checking username ~tp in the database", [NameAtom]),
-            case wall_users:exist(NameAtom) of
+            lager:info("User with name ~tp is trying to authenticate", [Name]),
+            lager:info("Checking username ~tp in the database", [Name]),
+            case wall_users:exist(Name) of
                 true ->
                     lager:info("the following user exist"),
                     {stop, normal, State};
                 false ->
                     lager:info("no such user exist. Creating"),
-                    wall_users:reg(NameAtom),
+                    wall_users:reg(Name, CurrentProcessId),
                     {noreply, State}
             end;
 
