@@ -9,9 +9,11 @@
 
 -export([start_link/0]).
 -export([stop/0]).
--export([reg/1]).
+-export([reg/2]).
+-export([del/1]).
 -export([exist/1]).
 -export([find/1]).
+-export([active_connections/0]).
 -export([stat/0]).
 
 %% ------------------------------------------------------------------
@@ -38,18 +40,26 @@ stop() ->
     gen_server:cast(?SERVER, stop).
 
 
-reg(UserName) when is_atom(UserName) ->
-    gen_server:call(?SERVER, {reguser, UserName}).
+reg(UserName, Pid) when is_binary(UserName) ->
+    gen_server:call(?SERVER, {reguser, UserName, Pid}).
+
+-spec del(binary()) -> boolean().
+del(UserName) ->
+    gen_server:call(?SERVER, {deluser, UserName}).
 
 
--spec exist(atom()) -> boolean().
-exist(UserName) when is_atom(UserName) ->
+-spec exist(binary()) -> boolean().
+exist(UserName) ->
     gen_server:call(?SERVER, {'is registered', UserName}).
 
 
--spec find(atom()) -> [{atom(), integer()}].
+-spec find(binary()) -> [{binary(), pid(), integer()}].
 find(UserName) ->
     gen_server:call(?SERVER, {find, UserName}).
+
+
+active_connections() ->
+    gen_server:call(?SERVER, connections).
 
 
 stat() ->
@@ -89,8 +99,12 @@ code_change(_OldVsn, State, _Extra) ->
 
 handle_call({'is registered', UserName}, _From, TableId) ->
    {reply, is_registered(ets:lookup(TableId, UserName)), TableId};
-handle_call({reguser, UserName}, _From, TableId) ->
-   {reply, register_user(TableId, UserName), TableId};
+handle_call(connections, _From, TableId) ->
+   {reply, get_active_connections(TableId), TableId};
+handle_call({reguser, UserName, Pid}, _From, TableId) ->
+   {reply, register_user(TableId, UserName, Pid), TableId};
+handle_call({deluser, UserName}, _From, TableId) ->
+   {reply, delete_user(TableId, UserName), TableId};
 handle_call({find, UserName}, _From, TableId) ->
     {reply, find_user(TableId, UserName), TableId};
 handle_call(stat, _From, TableId) ->
@@ -112,17 +126,25 @@ is_registered([])    -> false;
 is_registered([_])   -> true.
 
 % Registers user with given name
-register_user(TableId, UserName) when is_atom(UserName) ->
+register_user(TableId, UserName, Pid) ->
     lager:info("Registering a new user..."),
     RegistrationDate = get_time_millis(os:timestamp()),
-    Status = ets:insert(TableId, {UserName, RegistrationDate}),
+    Status = ets:insert(TableId, {UserName, {Pid, RegistrationDate}}),
     lager:debug("User registration status ~tp", [Status]),
-    lager:info("User ~tp registered ~tp", [UserName, RegistrationDate]),
-    {ok, UserName, RegistrationDate}.
+    lager:info("User ~tp registered ~tp. Acceptor id: ~tp", [UserName, RegistrationDate, Pid]),
+    {ok, UserName, Pid, RegistrationDate}.
+
+
+% Removes registered user
+delete_user(TableId, UserName) ->
+    lager:info("Removing user ~tp from database..", [UserName]),
+    Status = ets:remove(TableId, UserName),
+    lager:info("User was removed"),
+    Status.
 
 
 % Returns name and registration date
-find_user(TableId, UserName) when is_atom(UserName) ->
+find_user(TableId, UserName) ->
     lager:debug("Searching for user ~tp", [UserName]),
     ets:lookup(TableId, UserName).
 
@@ -133,6 +155,13 @@ get_statistics(TableId) ->
     Users = ets:tab2list(TableId),
     Length = length(Users),
     {Length, Users}.
+
+% returns list with active connections
+get_active_connections(TableId) ->
+    lager:info("Retrieving active connections"),
+    Data = ets:tab2list(TableId),
+    Pids = lists:map(fun ({Uname, {Pid, RegDate}}) -> Pid end, Data),
+    Pids.
 
 
 % Returns current time (since epoch) in milliseconds
