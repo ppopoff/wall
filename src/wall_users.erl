@@ -160,7 +160,7 @@ get_statistics(TableId) ->
 get_active_connections(TableId) ->
     lager:info("Retrieving active connections"),
     Data = ets:tab2list(TableId),
-    Pids = lists:map(fun ({Uname, {Pid, RegDate}}) -> Pid end, Data),
+    Pids = lists:map(fun ({_Uname, {Pid, _RegDate}}) -> Pid end, Data),
     Pids.
 
 
