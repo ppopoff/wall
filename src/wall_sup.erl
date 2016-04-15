@@ -16,6 +16,9 @@
 -spec start_link() -> {ok, pid()}.
 start_link() ->
     lager:info("Supervisor started"),
+
+    % Trap exit signals fromt the children
+    process_flag(trap_exit,true),
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 %% ===================================================================
@@ -30,7 +33,19 @@ init([]) ->
     MaxTimeBetweenRestarts = 10,
 
     SupervisorFlags = {
-        RestartStrategy, MaxRestarts, MaxTimeBetweenRestarts},
+        RestartStrategy, MaxRestarts, MaxTimeBetweenRestarts
+    },
 
-    {ok, {SupervisorFlags, []}}.
+    ChildSpec = [
+       {
+         storage, % Internal name *used only by supervisor
+         {wall_users, start_link, []}, % function: M/F/A
+         transient, % permanent | temporary
+         infinity,
+         worker, % can be worker | supervisor
+         dynamic
+       }
+    ],
+
+    {ok, {SupervisorFlags, ChildSpec}}.
 
