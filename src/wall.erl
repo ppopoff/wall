@@ -27,8 +27,9 @@ run() ->
 start(_StartType, _StartArgs) ->
     lager:info("Starting the ranch listener"),
 
-    case wall_sup:start_link() of
-        {ok, Pid} -> lager:info("Supervisor started ~tp", Pid);
+    _ProcessId = case wall_sup:start_link() of
+        {ok, Pid} -> lager:info("Supervisor started with pid: ~tp", Pid),
+                     Pid;
         Error     -> lager:error("Unable to start supervisor"),
                      Error
     end,
