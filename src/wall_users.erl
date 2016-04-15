@@ -12,6 +12,7 @@
 -export([reg/1]).
 -export([exist/1]).
 -export([find/1]).
+-export([stat/0]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -40,6 +41,7 @@ stop() ->
 reg(UserName) when is_atom(UserName) ->
     gen_server:call(?SERVER, {reguser, UserName}).
 
+
 -spec exist(atom()) -> boolean().
 exist(UserName) when is_atom(UserName) ->
     gen_server:call(?SERVER, {'is registered', UserName}).
@@ -48,6 +50,10 @@ exist(UserName) when is_atom(UserName) ->
 -spec find(atom()) -> [{atom(), integer()}].
 find(UserName) ->
     gen_server:call(?SERVER, {find, UserName}).
+
+
+stat() ->
+    gen_server:call(?SERVER, stat).
 
 
 %% ------------------------------------------------------------------
@@ -86,7 +92,9 @@ handle_call({'is registered', UserName}, _From, TableId) ->
 handle_call({reguser, UserName}, _From, TableId) ->
    {reply, register_user(TableId, UserName), TableId};
 handle_call({find, UserName}, _From, TableId) ->
-    {reply, find_user(TableId, UserName), TableId}.
+    {reply, find_user(TableId, UserName), TableId};
+handle_call(stat, _From, TableId) ->
+    {reply, get_statistics(TableId), TableId}.
 
 
 %% Stops the server
@@ -103,7 +111,7 @@ handle_cast(stop, TableId) ->
 is_registered([])    -> false;
 is_registered([_])   -> true.
 
-% Registers user with given name 
+% Registers user with given name
 register_user(TableId, UserName) when is_atom(UserName) ->
     lager:info("Registering a new user..."),
     RegistrationDate = os:timestamp(),
@@ -111,12 +119,21 @@ register_user(TableId, UserName) when is_atom(UserName) ->
     lager:debug("User registration status ~tp", [Status]),
     lager:info("User ~tp registered at: ~tp", [Status, RegistrationDate]),
     {ok, UserName, RegistrationDate}.
- 
+
 
 % Returns name and registration date
 find_user(TableId, UserName) when is_atom(UserName) ->
     lager:debug("Searching for user ~tp", [UserName]),
     ets:lookup(TableId, UserName).
+
+
+% retruns a map with user statistics
+get_statistics(TableId) ->
+    lager:debug("Statistics for the table"),
+    Users = ets:tab2list(TableId),
+    Length = length(Users),
+    {Length, Users}.
+
 
 % Returns current time (since epoch) in milliseconds
 get_time_millis(Now) ->
