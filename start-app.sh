@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # clean compile before run
-rebar clean compile
+./rebar clean compile
 
 # -s runs function: -s $MODULE $RUN
 # -pa CLASSPATH
