@@ -37,39 +37,50 @@ start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
 
+% Stops the server
 stop() ->
     gen_server:cast(?SERVER, stop).
 
 
+% Adds user to the ets table
 reg(UserName, Pid) when is_binary(UserName) ->
     gen_server:call(?SERVER, {reguser, UserName, Pid}).
 
 
+% Removes user from the ets table
 -spec del(binary()) -> boolean().
 del(UserName) ->
     gen_server:call(?SERVER, {deluser, UserName}).
 
 
+% Checks whether user exist, if so
+% returns true, false otherwise
 -spec exist(binary()) -> boolean().
 exist(UserName) ->
     gen_server:call(?SERVER, {'is registered', UserName}).
 
 
+% Searches for user in the ets
 -spec find(binary()) -> [{binary(), pid(), integer()}].
 find(UserName) ->
     gen_server:call(?SERVER, {find, UserName}).
 
 
+% Returns list of all active connections
 -spec active_connections() -> [pid()].
 active_connections() ->
     gen_server:call(?SERVER, connections).
 
 
+% Returns list of active connections (PIDs), except
+% for given one.
 -spec active_connections_except(pid()) -> [pid()].
 active_connections_except(Pid) ->
     gen_server:call(?SERVER, {connections_except, Pid}).
 
 
+% Returns the statistic information about the
+% number of users and other details
 stat() ->
     gen_server:call(?SERVER, stat).
 
@@ -80,18 +91,19 @@ stat() ->
 
 init([]) ->
     lager:info("Initializing the user storage..."),
-    lager:debug("Creating a table"),
+    lager:info("Creating a table"),
     TableId = ets:new(storage, [private, set]),
-    lager:debug("Creating a table"),
-    lager:debug("this is my table_id: ~tp", [TableId]),
+    lager:info("Creating a table"),
+    lager:info("this is my table_id: ~tp", [TableId]),
     {ok, TableId}.
+
 
 terminate(Reason, TableId) ->
     lager:info("Stopping the table service"),
-    lager:debug("Deleting the ~tp table", [TableId]),
+    lager:info("Deleting the ~tp table", [TableId]),
     Status =  ets:delete(TableId),
-    lager:debug("Done! ~tp", [Status]),
-    lager:debug("Terminated by following reason: ~tp~n", [Reason]),
+    lager:info("Done! ~tp", [Status]),
+    lager:info("Terminated by following reason: ~tp~n", [Reason]),
     ok.
 
 
@@ -140,7 +152,7 @@ register_user(TableId, UserName, Pid) ->
     lager:info("Registering a new user..."),
     RegistrationDate = get_time_millis(os:timestamp()),
     Status = ets:insert(TableId, {UserName, {Pid, RegistrationDate}}),
-    lager:debug("User registration status ~tp", [Status]),
+    lager:info("User registration status ~tp", [Status]),
     lager:info("User ~tp registered ~tp. Acceptor id: ~tp", [UserName, RegistrationDate, Pid]),
     {ok, UserName, Pid, RegistrationDate}.
 
@@ -155,13 +167,13 @@ delete_user(TableId, UserName) ->
 
 % Returns name and registration date
 find_user(TableId, UserName) ->
-    lager:debug("Searching for user ~tp", [UserName]),
+    lager:info("Searching for user ~tp", [UserName]),
     ets:lookup(TableId, UserName).
 
 
 % retruns a map with user statistics
 get_statistics(TableId) ->
-    lager:debug("Statistics for the table"),
+    lager:info("Statistics for the table"),
     Users = ets:tab2list(TableId),
     Length = length(Users),
     {Length, Users}.
