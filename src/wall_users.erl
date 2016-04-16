@@ -14,6 +14,7 @@
 -export([exist/1]).
 -export([find/1]).
 -export([active_connections/0]).
+-export([active_connections_except/1]).
 -export([stat/0]).
 
 %% ------------------------------------------------------------------
@@ -43,6 +44,7 @@ stop() ->
 reg(UserName, Pid) when is_binary(UserName) ->
     gen_server:call(?SERVER, {reguser, UserName, Pid}).
 
+
 -spec del(binary()) -> boolean().
 del(UserName) ->
     gen_server:call(?SERVER, {deluser, UserName}).
@@ -58,8 +60,14 @@ find(UserName) ->
     gen_server:call(?SERVER, {find, UserName}).
 
 
+-spec active_connections() -> [pid()].
 active_connections() ->
     gen_server:call(?SERVER, connections).
+
+
+-spec active_connections_except(pid()) -> [pid()].
+active_connections_except(Pid) ->
+    gen_server:call(?SERVER, {connections_except, Pid}).
 
 
 stat() ->
@@ -101,6 +109,8 @@ handle_call({'is registered', UserName}, _From, TableId) ->
    {reply, is_registered(ets:lookup(TableId, UserName)), TableId};
 handle_call(connections, _From, TableId) ->
    {reply, get_active_connections(TableId), TableId};
+handle_call({connections_except, Pid}, _From, TableId) ->
+   {reply, get_active_connections_except(TableId, Pid), TableId};
 handle_call({reguser, UserName, Pid}, _From, TableId) ->
    {reply, register_user(TableId, UserName, Pid), TableId};
 handle_call({deluser, UserName}, _From, TableId) ->
@@ -158,10 +168,16 @@ get_statistics(TableId) ->
 
 % returns list with active connections
 get_active_connections(TableId) ->
-    lager:info("Retrieving active connections"),
+    lager:info("Retrieving the list of active connections"),
     Data = ets:tab2list(TableId),
     Pids = lists:map(fun ({_Uname, {Pid, _RegDate}}) -> Pid end, Data),
     Pids.
+
+get_active_connections_except(TableId, PidToExclude) ->
+    lists:filter(
+        fun(Pid) -> Pid =/= PidToExclude end,
+        get_active_connections(TableId)
+     ).
 
 
 % Returns current time (since epoch) in milliseconds
