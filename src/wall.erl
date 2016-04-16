@@ -28,18 +28,21 @@ start(_StartType, _StartArgs) ->
     lager:info("Starting the ranch listener"),
 
     _ProcessId = case wall_sup:start_link() of
-        {ok, Pid} -> lager:info("Supervisor started with pid: ~tp", Pid),
+        {ok, Pid} -> lager:info("Supervisor started with pid: ~tp", [Pid]),
                      Pid;
         Error     -> lager:error("Unable to start supervisor"),
                      Error
     end,
 
-    NumberOfAcceptors = 1,
+    lager:info("Application details:"),
+    NumberOfAcceptors = 10,
+    lager:info("Number of acceptors: ~tp", [NumberOfAcceptors]),
     Port = 8000,
+    lager:info("Port number: ~tp", [Port]),
     Protocol = wall_protocol,
-    Options = [{port, Port}, {max_connections, infinity}],
+    Options = [{port, Port}],
 
-    {ok, _} = ranch:start_listener(
+    {ok, _RanchPid} = ranch:start_listener(
         wall_tcp, NumberOfAcceptors, ranch_tcp, Options, Protocol, []).
 
 
