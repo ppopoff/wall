@@ -141,8 +141,7 @@ terminate(_Reason, State={true, Username, _Socket, _Transport}) ->
     lager:info("Session was terminated"),
     case wall_users:exist(Username) of
         true ->  lager:info("removing the user ~tp", [Username]),
-                 %wall_users:del(Username),
-                 ok;
+                 wall_users:del(Username);
         false -> lager:info("No user exist. Safe termination"),
                  ok
     end;
