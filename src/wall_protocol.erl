@@ -112,6 +112,7 @@ handle_info({broadcast, Username, Message}, State={true, _CurrName, Socket, Tran
     %            Message/binary>>,
 
     % todo may be add username here
+    lager:info("To ~tp message: ~tp", [Socket, Message]),
     Transport:send(Socket, Message),
     {noreply, State};
 
