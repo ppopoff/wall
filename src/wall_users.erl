@@ -49,14 +49,14 @@ reg(UserName, Pid) when is_binary(UserName) ->
 
 % Removes user from the ets table
 -spec del(binary()) -> boolean().
-del(UserName) ->
+del(UserName) when is_binary(UserName) ->
     gen_server:call(?SERVER, {deluser, UserName}).
 
 
 % Checks whether user exist, if so
 % returns true, false otherwise
 -spec exist(binary()) -> boolean().
-exist(UserName) ->
+exist(UserName) when is_binary(UserName)->
     gen_server:call(?SERVER, {'is registered', UserName}).
 
 
@@ -117,18 +117,18 @@ code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 
-handle_call({'is registered', UserName}, _From, TableId) ->
-   {reply, is_registered(ets:lookup(TableId, UserName)), TableId};
+handle_call({'is registered', Username}, _From, TableId) ->
+   {reply, is_registered(ets:lookup(TableId, Username)), TableId};
 handle_call(connections, _From, TableId) ->
    {reply, get_active_connections(TableId), TableId};
 handle_call({connections_except, Pid}, _From, TableId) ->
    {reply, get_active_connections_except(TableId, Pid), TableId};
-handle_call({reguser, UserName, Pid}, _From, TableId) ->
-   {reply, register_user(TableId, UserName, Pid), TableId};
-handle_call({deluser, UserName}, _From, TableId) ->
-   {reply, delete_user(TableId, UserName), TableId};
-handle_call({find, UserName}, _From, TableId) ->
-    {reply, find_user(TableId, UserName), TableId};
+handle_call({reguser, Username, Pid}, _From, TableId) ->
+   {reply, register_user(TableId, Username, Pid), TableId};
+handle_call({deluser, Username}, _From, TableId) ->
+   {reply, delete_user(TableId, Username), TableId};
+handle_call({find, Username}, _From, TableId) ->
+    {reply, find_user(TableId, Username), TableId};
 handle_call(stat, _From, TableId) ->
     {reply, get_statistics(TableId), TableId}.
 
@@ -147,6 +147,7 @@ handle_cast(stop, TableId) ->
 is_registered([])    -> false;
 is_registered([_])   -> true.
 
+
 % Registers user with given name
 register_user(TableId, UserName, Pid) ->
     lager:info("Registering a new user..."),
@@ -158,11 +159,14 @@ register_user(TableId, UserName, Pid) ->
 
 
 % Removes registered user
-delete_user(TableId, UserName) ->
-    lager:info("Removing user ~tp from database..", [UserName]),
-    Status = ets:remove(TableId, UserName),
-    lager:info("User was removed"),
-    Status.
+delete_user(TableId, Username) ->
+    lager:info("Removing user ~tp from database..", [Username]),
+    case ets:delete(TableId, Username) of
+        true ->  lager:info("User was successfully removed"),
+                 ok;
+        false -> lager:warning("User was not removed"),
+                 ok
+    end.
 
 
 % Returns name and registration date
@@ -178,12 +182,14 @@ get_statistics(TableId) ->
     Length = length(Users),
     {Length, Users}.
 
+
 % returns list with active connections
 get_active_connections(TableId) ->
     lager:info("Retrieving the list of active connections"),
     Data = ets:tab2list(TableId),
     Pids = lists:map(fun ({_Uname, {Pid, _RegDate}}) -> Pid end, Data),
     Pids.
+
 
 get_active_connections_except(TableId, PidToExclude) ->
     lists:filter(
