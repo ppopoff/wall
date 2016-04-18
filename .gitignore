@@ -4,6 +4,9 @@
 # bytecode files
 *.beam
 
+# ignore crash dumps
+*.dump
+
 # rebar dependency files
 deps/*
 
