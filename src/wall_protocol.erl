@@ -54,9 +54,9 @@ init(Ref, Socket, Transport, _Opts = []) ->
 
 
 %% This code handles authorisation
-handle_info({tcp, Socket, Data}, State={false, _Username, Socket, Transport}) ->
+handle_info({tcp, Socket, Data}, State={false, _Uname, Socket, Transport}) ->
+    lager:info("Authenticating the user"),
     Transport:setopts(Socket, [{active, once}]),
-
 
     %% About the authentication protocol:
     %% user sends A message (username) that should be terminated with
@@ -65,8 +65,19 @@ handle_info({tcp, Socket, Data}, State={false, _Username, Socket, Transport}) ->
     %% 'OK\n'
     %% The prorocol was made that way because I wan't to be able to test
     %% using telnet
-    [Name, _Rest] = binary:split(Data, <<"\r\n">>),
-    AuthSucess = <<"OK\n">>,
+    HeaderSize = 2,
+    <<Header:HeaderSize/binary, Rest/binary>> = Data,
+
+
+    MessageLength = binary:decode_unsigned(Header),
+    lager:info("Header is ~tp", [MessageLength]),
+
+
+    <<Name:MessageLength/binary, Left/binary>> = Rest,
+    lager:info("Name is: ~tp", [Name]),
+
+
+    AuthSucess = <<"OK">>,
 
     lager:info("User with name ~tp is trying to authenticate", [Name]),
     lager:info("Checking username ~tp in the database", [Name]),

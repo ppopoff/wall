@@ -43,7 +43,7 @@ loop(Socket, Username) ->
             case Data of
 
                 % Authentication suceed
-                <<"OK\n">> ->
+                <<"OK">> ->
                     io:format("Welcome, ~tp~n", [Username]),
                     loop(Socket, Username);
 
@@ -94,7 +94,23 @@ disconnect(Socket) -> gen_tcp:close(Socket).
 -spec log_in(string(), port()) -> ok.
 log_in(Username, Socket) ->
     BinUname = list_to_binary(Username),
-    AuthDetails = <<BinUname/binary, "\r\n">>,
+    io:format("Name converted to binary: ~tp~n", [BinUname]),
+
+    StrLen = byte_size(BinUname),
+    io:format("Length of the name converted to binary: ~tp~n", [StrLen]),
+
+
+    Header = case binary:encode_unsigned(StrLen, big) of
+                Byte  when byte_size(Byte)  =:=1 -> <<0, Byte/bits>>;
+                Bytes when byte_size(Bytes) =:=2 -> Bytes
+                % TODO: handle other cases
+             end,
+
+    io:format("Header should look like ~tp~n", [Header]),
+
+    AuthDetails = <<Header/binary, BinUname/binary>>,
+    io:format("Authentication details: ~tp~n", [AuthDetails]),
+
     gen_tcp:send(Socket, AuthDetails),
     ok.
 
