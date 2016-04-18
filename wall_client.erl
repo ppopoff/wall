@@ -1,8 +1,8 @@
+#!/usr/bin/env escript
 -module(wall_client).
+-mode(compile).
 
--export([run/1]).
--export([disconnect/1]).
--export([start_listener/2, loop/2]).
+-export([start_listener/1, loop/1]).
 -export([decode_message/1, encode_message/1]).
 
 -define(TIMEOUT, 120000).
@@ -11,10 +11,10 @@
 
 
 %% An entry point to the application
-run(Username) ->
+main(Username) ->
     Socket = connect(),
     log_in(Username, Socket),
-    Pid = start_listener(Socket, Username),
+    Pid = start_listener(Socket),
     gen_tcp:controlling_process(Socket, Pid),
 
     %% Wait for user input and if it happens
@@ -32,29 +32,32 @@ repl(Pid) ->
   repl(Pid).
 
 
-start_listener(Socket, Username) ->
-    spawn(main, loop, [Socket, Username]).
+start_listener(Socket) ->
+    spawn(?MODULE, loop, [Socket]).
 
-loop(Socket, Username) ->
+
+loop(Socket) ->
     receive
         % Message received!
         {tcp, Socket, Data} ->
-            %DecodedMessage = decode_message(Data),
-            io:format(">> ~tp ~n", [Data]),
-            %io:format("> ~tp~n", [DecodedMessage]),
             inet:setopts(Socket, [{active, once}]),
-            loop(Socket, Username);
+            DecodedMessage = decode_message(Data),
+            io:format("> ~tp~n", [DecodedMessage]),
+            loop(Socket);
         {send, Message} ->
             inet:setopts(Socket, [{active, once}]),
             EncodedMessage = encode_message(Message),
             gen_tcp:send(Socket, EncodedMessage),
-            loop(Socket, Username);
+            loop(Socket);
         {tcp_error, _, _Reason} ->
             io:format("we're in a deep deep shit"),
+            gen_tcp:close(Socket),
             exit(normal);
         {tcp_closed, _Socket} ->
+            gen_tcp:close(Socket),
             exit(normal);
         stop ->
+            gen_tcp:close(Socket),
             exit(normal)
     end.
 
@@ -76,10 +79,6 @@ connect(Address, Port) ->
             %binary,
          ]),
     Socket.
-
-
--spec disconnect(port()) -> ok.
-disconnect(Socket) -> gen_tcp:close(Socket).
 
 
 -spec log_in(string(), port()) -> ok.
@@ -116,7 +115,8 @@ encode_message(Message) ->
 
 
 -spec decode_message(binary()) -> string().
-decode_message(Message) ->
+decode_message("OK") -> "Ok";
+decode_message(Message) when is_binary(Message) ->
     HeaderSize = 3,
     <<Header:HeaderSize/binary, Rest/binary>> = Message,
     io:format("Header ~tp~n", [Header]),
@@ -132,22 +132,22 @@ decode_message(Message) ->
 
 % Prompt utils
 % --------------------------------------------------------
--spec get_prompt(integer()) -> integer().
-get_prompt(Username) ->
-  "[" ++ localtime_ms() ++"] " ++ Username ++ ": ".
+%-spec get_prompt(integer()) -> integer().
+%get_prompt(Username) ->
+%  "[" ++ localtime_ms() ++"] " ++ Username ++ ": ".
 
 
 % timestamp utils
 % --------------------------------------------------------
--spec localtime_ms() -> string().
-localtime_ms() ->
-    {_, _, _Micro} = Now = os:timestamp(),
-    {_Date, {Hours, Minutes, Seconds}} = calendar:now_to_local_time(Now),
-    to_s(Hours) ++ ":" ++ to_s(Minutes) ++ ":" ++ to_s(Seconds).
+%-spec localtime_ms() -> string().
+%localtime_ms() ->
+%    {_, _, _Micro} = Now = os:timestamp(),
+%    {_Date, {Hours, Minutes, Seconds}} = calendar:now_to_local_time(Now),
+%    to_s(Hours) ++ ":" ++ to_s(Minutes) ++ ":" ++ to_s(Seconds).
 
 
 % utilities
 % ----------------------------------------------------------
--spec to_s(integer()) -> string().
-to_s(Int) -> io_lib:format("~p", [Int]).
+%-spec to_s(integer()) -> string().
+%to_s(Int) -> io_lib:format("~p", [Int]).
 
