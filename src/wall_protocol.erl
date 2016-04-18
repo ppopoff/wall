@@ -55,7 +55,7 @@ init(Ref, Socket, Transport, _Opts = []) ->
 
 
 %% This code handles authorisation
-handle_info({tcp, Socket, Data}, State={false, _Uname, Socket, Transport}) ->
+handle_info({tcp, Socket, Data}, _State={false, _Uname, Socket, Transport}) ->
     lager:info("Authenticating the user"),
     Transport:setopts(Socket, [{active, once}]),
 
@@ -86,8 +86,17 @@ handle_info({tcp, Socket, Data}, State={false, _Uname, Socket, Transport}) ->
 
     case wall_users:exist(Name) of
         true ->
-            lager:info("The specified user exist. Disconnecting..."),
-            {stop, normal, State};
+            lager:info("The specified user exist. Dropping that user..."),
+            notify_and_drop_given_client(Name),
+
+            % TODO: eliminate copy-pasting
+            Status = wall_users:reg(Name, self()),
+            lager:info("REREGISTRED with new status ~tp", [Status]),
+            NewState = {true, Name, Socket, Transport},
+            lager:info("returning new state ~tp", [NewState]),
+            Transport:send(Socket, AuthSucess),
+            {noreply, NewState};
+            %{stop, normal, State};
         false ->
             lager:info("no such user exist. Creating..."),
             % Registing the user with current process id
@@ -171,13 +180,17 @@ notify_other_clients(Username, Message) ->
     ).
 
 
-notify_given_client(Username, Message) ->
-    {_, Pid, _} = wall_users:find(Username),
+notify_and_drop_given_client(Username) ->
+    [{Username, {Pid, _Timestamp}}] = wall_users:find(Username),
     Message = encode_message(
         "A new user with following nickname connected. You will be dropped"),
 
-    Pid ! stop,
-    broadcast_message([Pid], Username, Message).
+    lager:info("Removing the user ~tp", [Username]),
+    Status = wall_users:del(Username),
+    lager:info("Removal status ~tp", [Status]),
+
+    broadcast_message([Pid], Username, Message),
+    Pid ! stop.
 
 
 
@@ -202,6 +215,5 @@ encode_message(Message) ->
              end,
 
     <<Header/binary, Payload/binary>>.
-
 
 
