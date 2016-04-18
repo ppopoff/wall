@@ -28,7 +28,7 @@ main(Username) ->
 %% and then prints the output
 repl(Pid) ->
   Prompt = ("> "),
-  Pid ! {send, encode_message(io:get_line(Prompt))},
+  Pid ! {send, io:get_line(Prompt)},
   repl(Pid).
 
 
@@ -42,7 +42,7 @@ loop(Socket) ->
         {tcp, Socket, Data} ->
             inet:setopts(Socket, [{active, once}]),
             DecodedMessage = decode_message(Data),
-            io:format("> ~tp~n", [DecodedMessage]),
+            io:format(get_prompt() ++ "~s", [DecodedMessage]),
             loop(Socket);
         {send, Message} ->
             inet:setopts(Socket, [{active, once}]),
@@ -111,43 +111,42 @@ encode_message(Message) ->
                 Bytes when byte_size(Bytes) =:=3 -> Bytes
              end,
 
-    <<Header/binary, Payload/binary>>.
+    <<Header/bits, Payload/bits>>.
 
 
--spec decode_message(binary()) -> string().
-decode_message("OK") -> "Ok";
+%% Greets the user
+decode_message("OK") -> "Now post!\n";
+decode_message(Message) when is_list(Message) ->
+    decode_message(list_to_binary(Message));
 decode_message(Message) when is_binary(Message) ->
     HeaderSize = 3,
     <<Header:HeaderSize/binary, Rest/binary>> = Message,
-    io:format("Header ~tp~n", [Header]),
     MessageLength = binary:decode_unsigned(Header),
-    io:format("Message size is: ~tp~n", [MessageLength]),
 
     <<Body:MessageLength/binary, _Left/binary>> = Rest,
     DecodedMessage = binary_to_term(Body),
-    io:format("Decoded message ~tp~n", [DecodedMessage]),
     DecodedMessage.
 
 
 
 % Prompt utils
 % --------------------------------------------------------
-%-spec get_prompt(integer()) -> integer().
-%get_prompt(Username) ->
-%  "[" ++ localtime_ms() ++"] " ++ Username ++ ": ".
+-spec get_prompt() -> string().
+get_prompt() ->
+  "[" ++ localtime_ms() ++"] ".
 
 
 % timestamp utils
 % --------------------------------------------------------
-%-spec localtime_ms() -> string().
-%localtime_ms() ->
-%    {_, _, _Micro} = Now = os:timestamp(),
-%    {_Date, {Hours, Minutes, Seconds}} = calendar:now_to_local_time(Now),
-%    to_s(Hours) ++ ":" ++ to_s(Minutes) ++ ":" ++ to_s(Seconds).
+-spec localtime_ms() -> string().
+localtime_ms() ->
+    {_, _, _Micro} = Now = os:timestamp(),
+    {_Date, {Hours, Minutes, Seconds}} = calendar:now_to_local_time(Now),
+    to_s(Hours) ++ ":" ++ to_s(Minutes) ++ ":" ++ to_s(Seconds).
 
 
 % utilities
 % ----------------------------------------------------------
-%-spec to_s(integer()) -> string().
-%to_s(Int) -> io_lib:format("~p", [Int]).
+-spec to_s(integer()) -> string().
+to_s(Int) -> io_lib:format("~p", [Int]).
 
