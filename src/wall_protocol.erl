@@ -21,6 +21,7 @@
 -export([terminate/2]).
 -export([code_change/3]).
 
+
 %-record(state, {auth_status, socket, transport}).
 
 -define(AUTH_HEADER, 16).
@@ -170,9 +171,37 @@ notify_other_clients(Username, Message) ->
     ).
 
 
+notify_given_client(Username, Message) ->
+    {_, Pid, _} = wall_users:find(Username),
+    Message = encode_message(
+        "A new user with following nickname connected. You will be dropped"),
+
+    Pid ! stop,
+    broadcast_message([Pid], Username, Message).
+
+
+
 broadcast_message([], _Username, _Message) ->
     ok;
 broadcast_message([Pid|Pids], Username, Message) ->
     Pid ! {broadcast, Username, Message},
     broadcast_message(Pids, Username, Message).
+
+
+%% message decoder/encoder
+%%
+-spec encode_message(string()) -> binary().
+encode_message(Message) ->
+    Payload = term_to_binary(Message),
+    PayloadSize = byte_size(Payload),
+
+    Header = case binary:encode_unsigned(PayloadSize, big) of
+                Byte  when byte_size(Byte)  =:=1 -> <<0, 0, Byte/bits>>;
+                Bytes when byte_size(Bytes) =:=2 -> <<0, Bytes/bits>>;
+                Bytes when byte_size(Bytes) =:=3 -> Bytes
+             end,
+
+    <<Header/binary, Payload/binary>>.
+
+
 
