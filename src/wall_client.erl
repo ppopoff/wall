@@ -3,6 +3,7 @@
 -export([run/1]).
 -export([disconnect/1]).
 -export([start_listener/2, loop/2]).
+-export([decode_message/1, encode_message/1]).
 
 -define(TIMEOUT, 120000).
 -define(ADDRESS, "localhost").
@@ -38,25 +39,15 @@ loop(Socket, Username) ->
     receive
         % Message received!
         {tcp, Socket, Data} ->
+            %DecodedMessage = decode_message(Data),
+            io:format(">> ~tp ~n", [Data]),
+            %io:format("> ~tp~n", [DecodedMessage]),
             inet:setopts(Socket, [{active, once}]),
-
-            case Data of
-
-                % Authentication suceed
-                <<"OK">> ->
-                    io:format("Welcome, ~tp~n", [Username]),
-                    loop(Socket, Username);
-
-                % Message that should be prited
-                Message ->
-                    DecodedMessage = decode_message(Message),
-                    io:format("> ~tp~n", [DecodedMessage]),
-                    loop(Socket, Username)
-            end;
+            loop(Socket, Username);
         {send, Message} ->
             inet:setopts(Socket, [{active, once}]),
-            WellFormedMessage = <<Message/binary>>,
-            gen_tcp:send(Socket, WellFormedMessage),
+            EncodedMessage = encode_message(Message),
+            gen_tcp:send(Socket, EncodedMessage),
             loop(Socket, Username);
         {tcp_error, _, _Reason} ->
             io:format("we're in a deep deep shit"),
@@ -94,11 +85,7 @@ disconnect(Socket) -> gen_tcp:close(Socket).
 -spec log_in(string(), port()) -> ok.
 log_in(Username, Socket) ->
     BinUname = list_to_binary(Username),
-    io:format("Name converted to binary: ~tp~n", [BinUname]),
-
     StrLen = byte_size(BinUname),
-    io:format("Length of the name converted to binary: ~tp~n", [StrLen]),
-
 
     Header = case binary:encode_unsigned(StrLen, big) of
                 Byte  when byte_size(Byte)  =:=1 -> <<0, Byte/bits>>;
@@ -106,11 +93,7 @@ log_in(Username, Socket) ->
                 % TODO: handle other cases
              end,
 
-    io:format("Header should look like ~tp~n", [Header]),
-
     AuthDetails = <<Header/binary, BinUname/binary>>,
-    io:format("Authentication details: ~tp~n", [AuthDetails]),
-
     gen_tcp:send(Socket, AuthDetails),
     ok.
 
@@ -119,11 +102,31 @@ log_in(Username, Socket) ->
 % --------------------------------------------------------
 
 -spec encode_message(string()) -> binary().
-encode_message(Message) -> list_to_binary(Message).
+encode_message(Message) ->
+    Payload = term_to_binary(Message),
+    PayloadSize = byte_size(Payload),
+
+    Header = case binary:encode_unsigned(PayloadSize, big) of
+                Byte  when byte_size(Byte)  =:=1 -> <<0, 0, Byte/bits>>;
+                Bytes when byte_size(Bytes) =:=2 -> <<0, Bytes/bits>>;
+                Bytes when byte_size(Bytes) =:=3 -> Bytes
+             end,
+
+    <<Header/binary, Payload/binary>>.
 
 
--spec decode_message(binary()) -> binary().
-decode_message(Message) -> Message.
+-spec decode_message(binary()) -> string().
+decode_message(Message) ->
+    HeaderSize = 3,
+    <<Header:HeaderSize/binary, Rest/binary>> = Message,
+    io:format("Header ~tp~n", [Header]),
+    MessageLength = binary:decode_unsigned(Header),
+    io:format("Message size is: ~tp~n", [MessageLength]),
+
+    <<Body:MessageLength/binary, _Left/binary>> = Rest,
+    DecodedMessage = binary_to_term(Body),
+    io:format("Decoded message ~tp~n", [DecodedMessage]),
+    DecodedMessage.
 
 
 
