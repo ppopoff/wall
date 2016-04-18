@@ -59,12 +59,13 @@ handle_info({tcp, Socket, Data}, State={false, _Uname, Socket, Transport}) ->
     Transport:setopts(Socket, [{active, once}]),
 
     %% About the authentication protocol:
-    %% user sends A message (username) that should be terminated with
-    %% the following sequence '\r\n'
-    %% Then server shoud authenticate the user and return
-    %% 'OK\n'
-    %% The prorocol was made that way because I wan't to be able to test
-    %% using telnet
+    %% user sends A message (username)
+    %% Message format:
+    %% Header: 2 bytes big endian int (size of payload)
+    %% Payload
+    %% Client should get the following line in response
+    %% 'OK'
+    %%
     HeaderSize = 2,
     <<Header:HeaderSize/binary, Rest/binary>> = Data,
 
@@ -73,7 +74,7 @@ handle_info({tcp, Socket, Data}, State={false, _Uname, Socket, Transport}) ->
     lager:info("Header is ~tp", [MessageLength]),
 
 
-    <<Name:MessageLength/binary, Left/binary>> = Rest,
+    <<Name:MessageLength/binary, _Left/binary>> = Rest,
     lager:info("Name is: ~tp", [Name]),
 
 
@@ -108,19 +109,8 @@ handle_info({tcp, Socket, Data}, State={true, Username, Socket, Transport}) ->
 
 % RECEIVING
 % Message broadcasting
-handle_info({broadcast, Username, Message}, State={true, _CurrName, Socket, Transport}) ->
+handle_info({broadcast, _Username, Message}, State={true, _CurrName, Socket, Transport}) ->
     Transport:setopts(Socket, [{active, once}]),
-
-    % About the protocol:
-    % It should send a number of messages
-    % Header consists of two parts: message length
-    % And name length
-    %PayloadLength = byte_size(Message),
-    %NameLength    = byte_size(Username),
-    %Message = <<PayloadLength:3/unsigned-big-integer,
-    %            NameLength:2/unsigned-big-integer,
-    %            Username/binary,
-    %            Message/binary>>,
 
     % todo may be add username here
     lager:info("To ~tp message: ~tp", [Socket, Message]),
@@ -149,7 +139,7 @@ handle_call(_Request, _From, State) ->
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
-terminate(_Reason, State={true, Username, _Socket, _Transport}) ->
+terminate(_Reason, _State={true, Username, _Socket, _Transport}) ->
     lager:info("Session was terminated"),
     case wall_users:exist(Username) of
         true ->  lager:info("removing the user ~tp", [Username]),
