@@ -58,66 +58,44 @@ init(Ref, Socket, Transport, _Opts = []) ->
 
 
 %% This code handles authorisation
+%% About the authentication protocol:
+%% user sends A message (username)
+%% Message format:
+%% Header: 2 bytes big endian int (size of payload)
+%% Payload
+%% Client should get the following line in response
+%% 'OK'
+%%
 handle_info({tcp, Socket, Data}, State=#state{auth_status = false}) ->
     Transport = State#state.transport,
     Socket    = State#state.socket,
-    lager:info("Authenticating the user"),
+    HeaderSize = 2,
+
+    lager:info("A new user is coming"),
     Transport:setopts(Socket, [{active, once}]),
 
-    %% About the authentication protocol:
-    %% user sends A message (username)
-    %% Message format:
-    %% Header: 2 bytes big endian int (size of payload)
-    %% Payload
-    %% Client should get the following line in response
-    %% 'OK'
-    %%
-    HeaderSize = 2,
     <<Header:HeaderSize/binary, Rest/binary>> = Data,
-
-
     MessageLength = binary:decode_unsigned(Header),
-    lager:info("Header is ~tp", [MessageLength]),
 
+    <<Username:MessageLength/binary, _Left/binary>> = Rest,
+    lager:info("User with name ~tp is trying to authenticate", [Username]),
+    lager:info("Checking username ~tp in the database", [Username]),
 
-    <<Name:MessageLength/binary, _Left/binary>> = Rest,
-    lager:info("Name is: ~tp", [Name]),
-
-
-    AuthSucess = <<"OK">>,
-
-    lager:info("User with name ~tp is trying to authenticate", [Name]),
-    lager:info("Checking username ~tp in the database", [Name]),
-
-    case wall_users:exist(Name) of
+    case wall_users:exist(Username) of
         true ->
             lager:info("The specified user exist. Dropping that user..."),
-            notify_and_drop_given_client(Name),
-
-            % TODO: eliminate copy-pasting
-            Status = wall_users:reg(Name, self()),
-            lager:info("REREGISTRED with new status ~tp", [Status]),
-            NewState = #state{auth_status=true, username=Name, socket=Socket, transport=Transport},
-            lager:info("returning new state ~tp", [NewState]),
-            Transport:send(Socket, AuthSucess),
-            {noreply, NewState};
-            %{stop, normal, State};
+            notify_and_drop_given_client(Username),
+            register_user(Username, Socket, Transport, true);
         false ->
             lager:info("no such user exist. Creating..."),
-            % Registing the user with current process id
-            wall_users:reg(Name, self()),
-            NewState = #state{auth_status=true, username=Name, socket=Socket, transport=Transport},
-            lager:info("returning new state ~tp", [NewState]),
-            Transport:send(Socket, AuthSucess),
-            {noreply, NewState}
+            register_user(Username, Socket, Transport, false)
     end;
 
 
 % SENDING
 % When user is authenticated
 % sends message to all the connected clients
-% TODO: remove socket from the state pattern matching
-handle_info({tcp, Socket, Data}, State=#state{auth_status=true, socket=Socket}) ->
+handle_info({tcp, Socket, Data}, State=#state{auth_status=true}) ->
     Transport = State#state.transport,
     Transport:setopts(Socket, [{active, once}]),
     notify_other_clients(State#state.username, Data),
@@ -129,12 +107,12 @@ handle_info({tcp, Socket, Data}, State=#state{auth_status=true, socket=Socket}) 
 handle_info({broadcast, _Username, Message}, State=#state{auth_status=true}) ->
     Transport = State#state.transport,
     Socket    = State#state.socket,
-    Transport:setopts(Socket, [{active, once}]),
 
-    % todo may be add username here
+    Transport:setopts(Socket, [{active, once}]),
     lager:info("To ~tp message: ~tp", [Socket, Message]),
     Transport:send(Socket, Message),
     {noreply, State};
+
 
 % Cases when server will be stopped
 handle_info({tcp_closed, _Socket}, State) ->
@@ -182,27 +160,48 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
+% Registers/reregisters user in the database
+register_user(Username, Socket, Transport, FirstTime) ->
+    Status = wall_users:reg(Username, self()),
+    lager:info(case FirstTime of
+        true  -> "New user registred with states ~tp";
+        false -> "Re-registred with new status ~tp"
+    end, [Status]),
+
+    NewState = #state{auth_status=true, username=Username, socket=Socket, transport=Transport},
+    lager:info("returning new state ~tp", [NewState]),
+
+    % Message that tells wtherer authentication is successful
+    Transport:send(Socket, _AuthSucess = <<"OK">>),
+    {noreply, NewState}.
+
+
+%% Sends broadcast message to all available clients
 notify_other_clients(Username, Message) ->
-    broadcast_message(
-        wall_users:active_connections_except(self()),
-        Username, Message
-    ).
+    ActiveClients = wall_users:active_connections_except(self()),
+    lager:info("Currently active clients are ~tp", [ActiveClients]),
+    broadcast_message(ActiveClients, Username, Message).
 
 
+%% Sends a farewell lellter to the user,
+%% removes it from database and drops the
+%% connection
 notify_and_drop_given_client(Username) ->
     [{Username, {Pid, _Timestamp}}] = wall_users:find(Username),
     Message = encode_message(
-        "A new user with following nickname connected. You will be dropped"),
+        "A new user with following nickname connected. You will be dropped\n"),
 
     lager:info("Removing the user ~tp", [Username]),
     Status = wall_users:del(Username),
     lager:info("Removal status ~tp", [Status]),
 
+    % Sends the final message and drops the user
     broadcast_message([Pid], Username, Message),
     Pid ! stop.
 
 
 
+%% Performs broadcasting
 broadcast_message([], _Username, _Message) ->
     ok;
 broadcast_message([Pid|Pids], Username, Message) ->
