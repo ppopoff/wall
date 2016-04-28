@@ -103,7 +103,7 @@ handle_info({tcp, Socket, Data}, State=#state{auth_status = false}) ->
 
 % When user is authenticated
 % receiving the header (message length == 0)
-handle_info({tcp, Socket, <<Data:8/bits, _Rest/binary>>}, State=#state{auth_status=true, message_length=0}) ->
+handle_info({tcp, Socket, <<Data:?BYTE/bits, Rest/binary>>}, State=#state{auth_status=true, message_length=0}) ->
     lager:info("Waiting for the header"),
     Transport = State#state.transport,
     Buf       = State#state.buffer,
@@ -114,18 +114,25 @@ handle_info({tcp, Socket, <<Data:8/bits, _Rest/binary>>}, State=#state{auth_stat
     NewBuf = <<Buf/binary, Data/binary>>,
 
     case has_header(NewBuf) of
-        true  ->
+        true  -> % We have enough data to decode the header
             % Extract the message length from header
             MessageLen = binary:decode_unsigned(NewBuf),
             % Pack the new state (with cleaned buffer and non empty message length)
             NewState = State#state{message_length = MessageLen, buffer = <<>>},
             %TODO: remove
-            lager:info("~tp", [NewState]),
+            lager:info("WE HAVE THE HEADER ~tp", [NewState]),
+
+            % Let's go to the message part
+            self() ! {tcp, Socket, Rest},
             {noreply, NewState, ?TIMEOUT};
-        false ->
+        false -> % We don't have enough data to decode the header
             NewState = State#state{buffer = NewBuf},
+
             %TODO: remove
             lager:info("~tp", [NewState]),
+
+            % Call this function again
+            self() ! {tcp, Socket, Rest},
             {noreply, NewState, ?TIMEOUT}
     end;
 
@@ -133,18 +140,25 @@ handle_info({tcp, Socket, <<Data:8/bits, _Rest/binary>>}, State=#state{auth_stat
 
 % When user is authenticated
 % receiving the message
-handle_info({tcp, Socket, <<Data:?BYTE, _Rest/binary>>}, State=#state{message_length=MessageLen}) when MessageLen > 0 ->
+handle_info({tcp, Socket, <<Data:?BYTE/bits, Rest/binary>>}, State=#state{message_length=MessageLen}) when MessageLen > 0 ->
     Transport = State#state.transport,
     Buf       = State#state.buffer,
     Transport:setopts(Socket, [{active, once}]),
 
+
+    lager:info("Decoding the message"),
+    lager:info("Message length is ~tp", [MessageLen]),
+
     %% Append received element to the buffer
-    NewBuf = <<Buf/bits, Data/bits>>,
+    NewBuf = <<Buf/binary, Data/binary>>,
 
     case byte_size(NewBuf) =:= MessageLen of
         true  ->  % we received the message
             % decode the message
             DecodedMessage = binary_to_term(NewBuf),
+
+            lager:info("received message ~tp", [NewBuf]),
+            lager:info("decoded message ~tp",  [DecodedMessage]),
 
             % and send it to other clients
             notify_other_clients(State#state.username, DecodedMessage),
@@ -155,6 +169,7 @@ handle_info({tcp, Socket, <<Data:?BYTE, _Rest/binary>>}, State=#state{message_le
 
         false ->  % we are still receiving the message: update the state
             % Update the buffer and proceed
+            self() ! {tcp, Socket, Rest},
             {noreply, State#state{buffer=NewBuf}, ?TIMEOUT}
     end;
 
