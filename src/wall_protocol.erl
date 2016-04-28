@@ -21,8 +21,9 @@
 -export([terminate/2]).
 -export([code_change/3]).
 
+%% Record that defines the connection state
+-record(state, {auth_status = false, username = <<>>, socket, transport}).
 
-%-record(state, {auth_status, socket, transport}).
 
 -define(AUTH_HEADER, 16).
 -define(SERVER, ?MODULE).
@@ -46,7 +47,9 @@ init(Ref, Socket, Transport, _Opts = []) ->
     ok = proc_lib:init_ack({ok, self()}),
     ok = ranch:accept_ack(Ref),
     ok = Transport:setopts(Socket, [{active, once}]),
-    gen_server:enter_loop(?MODULE, [], {false, <<>>, Socket, Transport}, ?TIMEOUT).
+    %% Creating a state for the connection
+    NewState = #state{socket=Socket, transport=Transport},
+    gen_server:enter_loop(?MODULE, [], NewState, ?TIMEOUT).
 
 
 %% ------------------------------------------------------------------
@@ -55,7 +58,9 @@ init(Ref, Socket, Transport, _Opts = []) ->
 
 
 %% This code handles authorisation
-handle_info({tcp, Socket, Data}, _State={false, _Uname, Socket, Transport}) ->
+handle_info({tcp, Socket, Data}, State=#state{auth_status = false}) ->
+    Transport = State#state.transport,
+    Socket    = State#state.socket,
     lager:info("Authenticating the user"),
     Transport:setopts(Socket, [{active, once}]),
 
@@ -92,7 +97,7 @@ handle_info({tcp, Socket, Data}, _State={false, _Uname, Socket, Transport}) ->
             % TODO: eliminate copy-pasting
             Status = wall_users:reg(Name, self()),
             lager:info("REREGISTRED with new status ~tp", [Status]),
-            NewState = {true, Name, Socket, Transport},
+            NewState = #state{auth_status=true, username=Name, socket=Socket, transport=Transport},
             lager:info("returning new state ~tp", [NewState]),
             Transport:send(Socket, AuthSucess),
             {noreply, NewState};
@@ -101,7 +106,7 @@ handle_info({tcp, Socket, Data}, _State={false, _Uname, Socket, Transport}) ->
             lager:info("no such user exist. Creating..."),
             % Registing the user with current process id
             wall_users:reg(Name, self()),
-            NewState = {true, Name, Socket, Transport},
+            NewState = #state{auth_status=true, username=Name, socket=Socket, transport=Transport},
             lager:info("returning new state ~tp", [NewState]),
             Transport:send(Socket, AuthSucess),
             {noreply, NewState}
@@ -111,15 +116,19 @@ handle_info({tcp, Socket, Data}, _State={false, _Uname, Socket, Transport}) ->
 % SENDING
 % When user is authenticated
 % sends message to all the connected clients
-handle_info({tcp, Socket, Data}, State={true, Username, Socket, Transport}) ->
+% TODO: remove socket from the state pattern matching
+handle_info({tcp, Socket, Data}, State=#state{auth_status=true, socket=Socket}) ->
+    Transport = State#state.transport,
     Transport:setopts(Socket, [{active, once}]),
-    notify_other_clients(Username, Data),
+    notify_other_clients(State#state.username, Data),
     {noreply, State, ?TIMEOUT};
 
 
 % RECEIVING
 % Message broadcasting
-handle_info({broadcast, _Username, Message}, State={true, _CurrName, Socket, Transport}) ->
+handle_info({broadcast, _Username, Message}, State=#state{auth_status=true}) ->
+    Transport = State#state.transport,
+    Socket    = State#state.socket,
     Transport:setopts(Socket, [{active, once}]),
 
     % todo may be add username here
@@ -149,20 +158,20 @@ handle_call(_Request, _From, State) ->
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
-terminate(_Reason, _State={true, Username, _Socket, _Transport}) ->
+
+terminate(_Reason, _State=#state{auth_status=false, username = <<>>}) ->
+    lager:info("Session was terminated, before user logged in."),
+    ok;
+
+
+terminate(_Reason, State) ->
     lager:info("Session was terminated"),
-    case wall_users:exist(Username) of
-        true ->  lager:info("removing the user ~tp", [Username]),
-                 wall_users:del(Username);
+    case wall_users:exist(State#state.username) of
+        true ->  lager:info("removing the user ~tp", [State#state.username]),
+                 wall_users:del(State#state.username);
         false -> lager:info("No user exist. Safe termination"),
                  ok
-    end;
-
-
-terminate(_Reason, _State={false, <<>>, _Socket, _Transport}) ->
-    lager:info("Session was terminated, before user logged in."),
-    ok.
-
+    end.
 
 
 code_change(_OldVsn, State, _Extra) ->
