@@ -22,12 +22,20 @@
 -export([code_change/3]).
 
 %% Record that defines the connection state
--record(state, {auth_status = false, username = <<>>, socket, transport}).
+-record(state, {
+    auth_status = false,
+    username = <<>>,
+    socket,
+    transport,
+    buffer = <<>>,
+    message_length = 0
+}).
 
 
 -define(AUTH_HEADER, 16).
 -define(SERVER, ?MODULE).
--define(TIMEOUT, 86400000).
+-define(BYTE, 8).
+-define(TIMEOUT, infinity).
 
 
 
@@ -75,9 +83,9 @@ handle_info({tcp, Socket, Data}, State=#state{auth_status = false}) ->
     Transport:setopts(Socket, [{active, once}]),
 
     <<Header:HeaderSize/binary, Rest/binary>> = Data,
-    MessageLength = binary:decode_unsigned(Header),
+    MessageLen = binary:decode_unsigned(Header),
 
-    <<Username:MessageLength/binary, _Left/binary>> = Rest,
+    <<Username:MessageLen/binary, _Left/binary>> = Rest,
     lager:info("User with name ~tp is trying to authenticate", [Username]),
     lager:info("Checking username ~tp in the database", [Username]),
 
@@ -92,17 +100,67 @@ handle_info({tcp, Socket, Data}, State=#state{auth_status = false}) ->
     end;
 
 
-% SENDING
+
 % When user is authenticated
-% sends message to all the connected clients
-handle_info({tcp, Socket, Data}, State=#state{auth_status=true}) ->
+% receiving the header (message length == 0)
+handle_info({tcp, Socket, <<Data:8/bits, _Rest/binary>>}, State=#state{auth_status=true, message_length=0}) ->
+    lager:info("Waiting for the header"),
     Transport = State#state.transport,
+    Buf       = State#state.buffer,
+
     Transport:setopts(Socket, [{active, once}]),
-    notify_other_clients(State#state.username, Data),
-    {noreply, State, ?TIMEOUT};
+
+    %% Append received element to the buffer
+    NewBuf = <<Buf/binary, Data/binary>>,
+
+    case has_header(NewBuf) of
+        true  ->
+            % Extract the message length from header
+            MessageLen = binary:decode_unsigned(NewBuf),
+            % Pack the new state (with cleaned buffer and non empty message length)
+            NewState = State#state{message_length = MessageLen, buffer = <<>>},
+            %TODO: remove
+            lager:info("~tp", [NewState]),
+            {noreply, NewState, ?TIMEOUT};
+        false ->
+            NewState = State#state{buffer = NewBuf},
+            %TODO: remove
+            lager:info("~tp", [NewState]),
+            {noreply, NewState, ?TIMEOUT}
+    end;
 
 
-% RECEIVING
+
+% When user is authenticated
+% receiving the message
+handle_info({tcp, Socket, <<Data:?BYTE, _Rest/binary>>}, State=#state{message_length=MessageLen}) when MessageLen > 0 ->
+    Transport = State#state.transport,
+    Buf       = State#state.buffer,
+    Transport:setopts(Socket, [{active, once}]),
+
+    %% Append received element to the buffer
+    NewBuf = <<Buf/bits, Data/bits>>,
+
+    case byte_size(NewBuf) =:= MessageLen of
+        true  ->  % we received the message
+            % decode the message
+            DecodedMessage = binary_to_term(NewBuf),
+
+            % and send it to other clients
+            notify_other_clients(State#state.username, DecodedMessage),
+
+            % Reset the state and return updated
+            NewState = State#state{message_length = 0, buffer = <<>>},
+            {noreply, NewState, ?TIMEOUT};
+
+        false ->  % we are still receiving the message: update the state
+            % Update the buffer and proceed
+            {noreply, State#state{buffer=NewBuf}, ?TIMEOUT}
+    end;
+
+
+
+
 % Message broadcasting
 handle_info({broadcast, _Username, Message}, State=#state{auth_status=true}) ->
     Transport = State#state.transport,
@@ -133,6 +191,7 @@ handle_info(_Info, State) ->
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
+% Unknown message accepted
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
@@ -176,11 +235,16 @@ register_user(Username, Socket, Transport, FirstTime) ->
     {noreply, NewState}.
 
 
+
+%% TODO: send user name together with the message
+%% That's why I decode ane encode message on the server side!
 %% Sends broadcast message to all available clients
-notify_other_clients(Username, Message) ->
+notify_other_clients(Username, Message) when is_list(Message) ->
     ActiveClients = wall_users:active_connections_except(self()),
     lager:info("Currently active clients are ~tp", [ActiveClients]),
-    broadcast_message(ActiveClients, Username, Message).
+    lager:info("Broadcasting: ~tp: ~tp", [Username, Message]),
+    broadcast_message(ActiveClients, Username, encode_message(Message)).
+
 
 
 %% Sends a farewell lellter to the user,
@@ -223,5 +287,14 @@ encode_message(Message) ->
              end,
 
     <<Header/binary, Payload/binary>>.
+
+
+
+%% Decoding helper functions
+has_header(Buffer) when is_binary(Buffer) ->
+  case byte_size(Buffer) of
+    3 -> true;
+    _ -> false
+  end.
 
 
