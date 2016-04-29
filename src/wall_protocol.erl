@@ -1,3 +1,5 @@
+%%% -*- erlang -*-
+
 -module(wall_protocol).
 -behaviour(gen_server).
 -behaviour(ranch_protocol).
@@ -21,7 +23,7 @@
 -export([terminate/2]).
 -export([code_change/3]).
 
-%% Record that defines the connection state
+
 -record(state, {
     auth_status = false,
     username = <<>>,
@@ -65,11 +67,11 @@ init(Ref, Socket, Transport, _Opts = []) ->
 %% ------------------------------------------------------------------
 
 
-%% This code handles authorisation
+%% This code handles authorization
 %% About the authentication protocol:
 %% user sends A message (username)
 %% Message format:
-%% Header: 2 bytes big endian int (size of payload)
+%% Header: 2 bytes big Endian int (size of payload)
 %% Payload
 %% Client should get the following line in response
 %% 'OK'
@@ -106,30 +108,25 @@ handle_info({tcp, Socket, Data}, State=#state{auth_status = false}) ->
 handle_info({tcp, Socket, <<Data:?BYTE/bits, Rest/binary>>}, State=#state{auth_status=true, message_length=0}) ->
     lager:info("Waiting for the header"),
     Transport = State#state.transport,
-    Buf       = State#state.buffer,
+    Buffer    = State#state.buffer,
 
     Transport:setopts(Socket, [{active, once}]),
 
     %% Append received element to the buffer
-    NewBuf = <<Buf/binary, Data/binary>>,
+    NewBuffer = <<Buffer/binary, Data/binary>>,
 
-    case has_header(NewBuf) of
+    case has_header(NewBuffer) of
         true  -> % We have enough data to decode the header
             % Extract the message length from header
-            MessageLen = binary:decode_unsigned(NewBuf),
+            MessageLen = binary:decode_unsigned(NewBuffer),
             % Pack the new state (with cleaned buffer and non empty message length)
             NewState = State#state{message_length = MessageLen, buffer = <<>>},
-            %TODO: remove
-            lager:info("WE HAVE THE HEADER ~tp", [NewState]),
 
             % Let's go to the message part
             self() ! {tcp, Socket, Rest},
             {noreply, NewState, ?TIMEOUT};
         false -> % We don't have enough data to decode the header
-            NewState = State#state{buffer = NewBuf},
-
-            %TODO: remove
-            lager:info("~tp", [NewState]),
+            NewState = State#state{buffer = NewBuffer},
 
             % Call this function again
             self() ! {tcp, Socket, Rest},
@@ -140,25 +137,18 @@ handle_info({tcp, Socket, <<Data:?BYTE/bits, Rest/binary>>}, State=#state{auth_s
 
 % When user is authenticated
 % receiving the message
-handle_info({tcp, Socket, <<Data:?BYTE/bits, Rest/binary>>}, State=#state{message_length=MessageLen}) when MessageLen > 0 ->
+handle_info({tcp, Socket, <<Data:?BYTE/bits, Rest/binary>>}, State=#state{message_length=MsgLen}) when MsgLen > 0 ->
     Transport = State#state.transport,
-    Buf       = State#state.buffer,
+    Buffer    = State#state.buffer,
     Transport:setopts(Socket, [{active, once}]),
 
-
-    lager:info("Decoding the message"),
-    lager:info("Message length is ~tp", [MessageLen]),
-
     %% Append received element to the buffer
-    NewBuf = <<Buf/binary, Data/binary>>,
+    NewBuffer = <<Buffer/binary, Data/binary>>,
 
-    case byte_size(NewBuf) =:= MessageLen of
+    case byte_size(NewBuffer) =:= MsgLen of
         true  ->  % we received the message
             % decode the message
-            DecodedMessage = binary_to_term(NewBuf),
-
-            lager:info("received message ~tp", [NewBuf]),
-            lager:info("decoded message ~tp",  [DecodedMessage]),
+            DecodedMessage = binary_to_term(NewBuffer),
 
             % and send it to other clients
             notify_other_clients(State#state.username, DecodedMessage),
@@ -170,7 +160,7 @@ handle_info({tcp, Socket, <<Data:?BYTE/bits, Rest/binary>>}, State=#state{messag
         false ->  % we are still receiving the message: update the state
             % Update the buffer and proceed
             self() ! {tcp, Socket, Rest},
-            {noreply, State#state{buffer=NewBuf}, ?TIMEOUT}
+            {noreply, State#state{buffer=NewBuffer}, ?TIMEOUT}
     end;
 
 
@@ -262,9 +252,8 @@ notify_other_clients(Username, Message) when is_list(Message) ->
 
 
 
-%% Sends a farewell lellter to the user,
-%% removes it from database and drops the
-%% connection
+%% Sends a farewell letter to the user,
+%% removes they from database and drops the connection
 notify_and_drop_given_client(Username) ->
     [{Username, {Pid, _Timestamp}}] = wall_users:find(Username),
     Message = encode_message(
@@ -280,7 +269,8 @@ notify_and_drop_given_client(Username) ->
 
 
 
-%% Performs broadcasting
+%% @doc Broadcast given message to other users
+-spec broadcast_message (list(pid()), string(), binary()) -> ok.
 broadcast_message([], _Username, _Message) ->
     ok;
 broadcast_message([Pid|Pids], Username, Message) ->
@@ -288,11 +278,10 @@ broadcast_message([Pid|Pids], Username, Message) ->
     broadcast_message(Pids, Username, Message).
 
 
-%% message decoder/encoder
-%%
+%% @doc Encode message to the protocol-friendly format
 -spec encode_message(string()) -> binary().
 encode_message(Message) ->
-    Payload = term_to_binary(Message),
+    Payload     = term_to_binary(Message),
     PayloadSize = byte_size(Payload),
 
     Header = case binary:encode_unsigned(PayloadSize, big) of
@@ -304,8 +293,8 @@ encode_message(Message) ->
     <<Header/binary, Payload/binary>>.
 
 
-
-%% Decoding helper functions
+%% @doc Tell whether binary has a header
+-spec has_header(binary()) -> boolean().
 has_header(Buffer) when is_binary(Buffer) ->
   case byte_size(Buffer) of
     3 -> true;
