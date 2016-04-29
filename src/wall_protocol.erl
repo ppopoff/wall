@@ -29,8 +29,7 @@
     username = <<>>,
     socket,
     transport,
-    buffer = <<>>,
-    message_length = 0
+    buffer = <<>>
 }).
 
 
@@ -103,8 +102,7 @@ handle_info({tcp, Socket, Data}, State=#state{auth_status = false}) ->
 
 
 
-% When user is authenticated
-% receiving the header (message length == 0)
+% @doc Receiving the message when user is authenticated
 handle_info({tcp, Socket, Data}, State=#state{auth_status=true}) ->
     lager:info("Waiting for the header"),
     Transport = State#state.transport,
@@ -113,47 +111,14 @@ handle_info({tcp, Socket, Data}, State=#state{auth_status=true}) ->
     %% Append received element to the buffer
     CurrentBuffer = <<Buffer/binary, Data/binary>>,
 
-    % Calculating message length
-    MessageLen = case byte_size(CurrentBuffer) >= 3 of
-                      true ->
-                          <<Header:24/unsigned-big-integer, _Rest/binary>> = CurrentBuffer,
-                          Header;
-                      false ->
-                         0
-                 end,
+    % If some data is left it will be kept inside the buffer
+    NewState = decode_data(CurrentBuffer, State),
 
-    % Obtaining header status based on the Messsage length (whether it's received)
-    case MessageLen of
-         0 -> % We did't receive the header, read more
-              % update buffer and wait for other data to come
-              Transport:setopts(Socket, [{active, once}]),
-              {noreply, State#state{buffer = CurrentBuffer}, ?TIMEOUT};
-
-         _ -> % We have header, do we have enough data to proceed with message?
-              % Message size at this moment
-              CurrentMessageSize = byte_size(CurrentBuffer) - 3,
-
-              case CurrentMessageSize >= MessageLen of
-                  true ->
-                      % decode the message
-                      % REST USE AND MOVE IT BACK TO BUFFER
-                      <<_:3/binary, MessageBody:MessageLen/binary>> = CurrentBuffer,
-                      DecodedMessage = binary_to_term(MessageBody),
-                      % and send it to other clients
-                      notify_other_clients(State#state.username, DecodedMessage),
-                      % Reset the state and return updated
-                      Transport:setopts(Socket, [{active, once}]),
-                      {noreply, State#state{buffer = <<>>}, ?TIMEOUT};
-
-                  false ->
-                     Transport:setopts(Socket, [{active, once}]),
-                     {noreply, State#state{buffer = CurrentBuffer}, ?TIMEOUT}
-              end
-    end;
+    Transport:setopts(Socket, [{active, once}]),
+    {noreply, NewState, ?TIMEOUT};
 
 
-
-% Message broadcasting
+% @doc Message broadcasting
 handle_info({broadcast, _Username, Message}, State=#state{auth_status=true}) ->
     Transport = State#state.transport,
     Socket    = State#state.socket,
@@ -280,3 +245,25 @@ encode_message(Message) ->
     <<Header/binary, Payload/binary>>.
 
 
+% @doc decodes the message and sends it to the user
+decode_data(<<>>, State) ->
+    State;
+decode_data(<<Size:24/unsigned-big-integer, Rest/binary>>, State) ->
+    case byte_size(Rest) >= Size of
+         true  -> % At least one message was received
+
+               % Extract the message body
+               <<MessageBody:Size/binary, BytesRem/binary>> = Rest,
+               %<<_Header:3/binary, MessageBody:Size/binary, BytesRem/binary>> = Rest,
+
+               % Decode the message
+               DecodedMessage = binary_to_term(MessageBody),
+
+               % and send it to other clients
+               notify_other_clients(State#state.username, DecodedMessage),
+
+               % decode other data
+               decode_data(BytesRem, State#state{buffer=BytesRem});
+         false -> % No integral messages received
+               State
+    end.
