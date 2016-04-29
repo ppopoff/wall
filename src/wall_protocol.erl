@@ -246,9 +246,7 @@ encode_message(Message) ->
 
 
 % @doc decodes the message and sends it to the user
-decode_data(<<>>, State) ->
-    State;
-decode_data(<<Size:24/unsigned-big-integer, Rest/binary>>, State) ->
+decode_data(Data = <<Size:24/unsigned-big-integer, Rest/binary>>, State) ->
     case byte_size(Rest) >= Size of
          true  -> % At least one message was received
 
@@ -265,5 +263,10 @@ decode_data(<<Size:24/unsigned-big-integer, Rest/binary>>, State) ->
                % decode other data
                decode_data(BytesRem, State#state{buffer=BytesRem});
          false -> % No integral messages received
-               State
-    end.
+               % Put Data back into the buffer
+               State#state{buffer=Data}
+    end;
+decode_data(<<>>, State) ->
+    State;
+decode_data(Buffer, State) ->
+    State#state{buffer=Buffer}.
