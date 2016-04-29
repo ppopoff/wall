@@ -36,7 +36,7 @@
 
 -define(AUTH_HEADER, 16).
 -define(SERVER, ?MODULE).
--define(BYTE, 8).
+-define(HEADER_SIZE, 24). % 3 bytes
 -define(TIMEOUT, infinity).
 
 
@@ -105,64 +105,50 @@ handle_info({tcp, Socket, Data}, State=#state{auth_status = false}) ->
 
 % When user is authenticated
 % receiving the header (message length == 0)
-handle_info({tcp, Socket, <<Data:?BYTE/bits, Rest/binary>>}, State=#state{auth_status=true, message_length=0}) ->
+handle_info({tcp, Socket, Data}, State=#state{auth_status=true}) ->
     lager:info("Waiting for the header"),
     Transport = State#state.transport,
     Buffer    = State#state.buffer,
 
-    Transport:setopts(Socket, [{active, once}]),
-
     %% Append received element to the buffer
-    NewBuffer = <<Buffer/binary, Data/binary>>,
+    CurrentBuffer = <<Buffer/binary, Data/binary>>,
 
-    case has_header(NewBuffer) of
-        true  -> % We have enough data to decode the header
-            % Extract the message length from header
-            MessageLen = binary:decode_unsigned(NewBuffer),
-            % Pack the new state (with cleaned buffer and non empty message length)
-            NewState = State#state{message_length = MessageLen, buffer = <<>>},
+    % Calculating message length
+    MessageLen = case byte_size(CurrentBuffer) >= 3 of
+                      true ->
+                          <<Header:3/binary, Rest/binary>> = CurrentBuffer,
+                          binary:decode_unsigned(Header);
+                      false ->
+                         0
+                 end,
 
-            % Let's go to the message part
-            self() ! {tcp, Socket, Rest},
-            {noreply, NewState, ?TIMEOUT};
-        false -> % We don't have enough data to decode the header
-            NewState = State#state{buffer = NewBuffer},
+    % Obtaining header status based on the Messsage length (whether it's received)
+    case MessageLen of
+         0 -> % We did't receive the header, read more
+              % update buffer and wait for other data to come
+              Transport:setopts(Socket, [{active, once}]),
+              {noreply, State#state{buffer = CurrentBuffer}, ?TIMEOUT};
 
-            % Call this function again
-            self() ! {tcp, Socket, Rest},
-            {noreply, NewState, ?TIMEOUT}
+         _ -> % We have header, do we have enough data to proceed with message?
+              % Message size at this moment
+              CurrentMessageSize = byte_size(CurrentBuffer) - 3,
+
+              case CurrentMessageSize >= MessageLen of
+                  true ->
+                      % decode the message
+                      <<_:3/binary, MessageBody:MessageLen/binary>> = CurrentBuffer,
+                      DecodedMessage = binary_to_term(MessageBody),
+                      % and send it to other clients
+                      notify_other_clients(State#state.username, DecodedMessage),
+                      % Reset the state and return updated
+                      Transport:setopts(Socket, [{active, once}]),
+                      {noreply, State#state{buffer = <<>>}, ?TIMEOUT};
+
+                  false ->
+                     Transport:setopts(Socket, [{active, once}]),
+                     {noreply, State#state{buffer = CurrentBuffer}, ?TIMEOUT}
+              end
     end;
-
-
-
-% When user is authenticated
-% receiving the message
-handle_info({tcp, Socket, <<Data:?BYTE/bits, Rest/binary>>}, State=#state{message_length=MsgLen}) when MsgLen > 0 ->
-    Transport = State#state.transport,
-    Buffer    = State#state.buffer,
-    Transport:setopts(Socket, [{active, once}]),
-
-    %% Append received element to the buffer
-    NewBuffer = <<Buffer/binary, Data/binary>>,
-
-    case byte_size(NewBuffer) =:= MsgLen of
-        true  ->  % we received the message
-            % decode the message
-            DecodedMessage = binary_to_term(NewBuffer),
-
-            % and send it to other clients
-            notify_other_clients(State#state.username, DecodedMessage),
-
-            % Reset the state and return updated
-            NewState = State#state{message_length = 0, buffer = <<>>},
-            {noreply, NewState, ?TIMEOUT};
-
-        false ->  % we are still receiving the message: update the state
-            % Update the buffer and proceed
-            self() ! {tcp, Socket, Rest},
-            {noreply, State#state{buffer=NewBuffer}, ?TIMEOUT}
-    end;
-
 
 
 
@@ -291,14 +277,5 @@ encode_message(Message) ->
              end,
 
     <<Header/binary, Payload/binary>>.
-
-
-%% @doc Tell whether binary has a header
--spec has_header(binary()) -> boolean().
-has_header(Buffer) when is_binary(Buffer) ->
-  case byte_size(Buffer) of
-    3 -> true;
-    _ -> false
-  end.
 
 
