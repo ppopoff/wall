@@ -116,8 +116,8 @@ handle_info({tcp, Socket, Data}, State=#state{auth_status=true}) ->
     % Calculating message length
     MessageLen = case byte_size(CurrentBuffer) >= 3 of
                       true ->
-                          <<Header:3/binary, Rest/binary>> = CurrentBuffer,
-                          binary:decode_unsigned(Header);
+                          <<Header:24/unsigned-big-integer, _Rest/binary>> = CurrentBuffer,
+                          Header;
                       false ->
                          0
                  end,
@@ -136,6 +136,7 @@ handle_info({tcp, Socket, Data}, State=#state{auth_status=true}) ->
               case CurrentMessageSize >= MessageLen of
                   true ->
                       % decode the message
+                      % REST USE AND MOVE IT BACK TO BUFFER
                       <<_:3/binary, MessageBody:MessageLen/binary>> = CurrentBuffer,
                       DecodedMessage = binary_to_term(MessageBody),
                       % and send it to other clients
