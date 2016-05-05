@@ -13,7 +13,8 @@
 %% ===================================================================
 %% Application callbacks
 %% ===================================================================
-%%
+%% TODO: Try to use ensure_all_started once
+%% TODO: look at application:start(Application, TYPE) where type is permanent
 run() ->
     application:ensure_all_started(ranch),
     application:ensure_all_started(compiler),
@@ -54,3 +55,16 @@ stop(_State) ->
 
 shutdown() ->
     application:stop(wall).
+
+
+%% @doc return a config value
+get_app_env(Key) ->
+    get_app_env(Key, undefined).
+
+
+%% @doc return a config value
+get_app_env(Key, DefaultValue) ->
+    case application:get_env(wall, Key) of
+        {ok, Value} -> Value;
+        undefined   -> DefaultValue
+    end.
