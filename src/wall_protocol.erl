@@ -25,12 +25,14 @@
 
 
 -record(state, {
-    auth_status = false,
-    username = <<>>,
-    socket,
-    transport,
-    buffer = <<>>
+    auth_status = false :: boolean(),
+    username = <<>>     :: binary(),
+    socket              :: port(),
+    transport           :: any(), %TODO: handle this type
+    buffer = <<>>       :: binary()
 }).
+
+-type state() :: #state{}.
 
 
 -define(AUTH_HEADER, 16).
@@ -249,16 +251,9 @@ encode_message(Message) ->
 decode_data(Data = <<Size:24/unsigned-big-integer, Rest/binary>>, State) ->
     case byte_size(Rest) >= Size of
          true  -> % At least one message was received
-
-               % Extract the message body
                <<MessageBody:Size/binary, BytesRem/binary>> = Rest,
-               %<<_Header:3/binary, MessageBody:Size/binary, BytesRem/binary>> = Rest,
 
-               % Decode the message
-               DecodedMessage = binary_to_term(MessageBody),
-
-               % and send it to other clients
-               notify_other_clients(State#state.username, DecodedMessage),
+               handle_message(MessageBody, State),
 
                % decode other data
                decode_data(BytesRem, State#state{buffer=BytesRem});
@@ -266,7 +261,25 @@ decode_data(Data = <<Size:24/unsigned-big-integer, Rest/binary>>, State) ->
                % Put Data back into the buffer
                State#state{buffer=Data}
     end;
-decode_data(<<>>, State) ->
-    State;
 decode_data(Buffer, State) ->
     State#state{buffer=Buffer}.
+
+
+
+% @doc Decodes the message and send it to the other clients
+% @spec
+-spec handle_message(binary(), state()) -> ok.
+handle_message(MessageBody, State) ->
+    % Decode the message
+    DecodedMessage = deserialize(MessageBody),
+    notify_other_clients(State#state.username, DecodedMessage),
+    ok.
+
+
+% @doc Deserializes the message's content
+% @spec deserialize(binary()) -> term().
+-spec deserialize(binary()) -> term().
+deserialize(MessageBody) ->
+    % throws an exception in case the presentce of atoms
+    binary_to_term(MessageBody, [safe]).
+
