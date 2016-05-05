@@ -1,0 +1,33 @@
+Server
+======
+
+BUGS:
+0. Fix bug with disconnected users:
+to do so add additional logging
+and use observer:
+http://erlang.org/doc/apps/observer/users_guide.html
+http://erlang.org/doc/man/observer.html
+observer:start()
+
+
+IMPROVEMENTS:
+0. Change the message format: use map instead.
+   The map should track: Username, message and, datatime
+1. Change authentication mechanism (use 1 byte for header),
+   and the same algoritm as for the message decoding. Use binary to term
+2. Write a proper lager config
+3. Add sys.conf and enable it
+4. Enable ssl support.
+
+
+
+Client
+======
+0. Use gen:server instead of low-level parallel programming
+1. Implement decoding that works the same way as the server
+
+
+
+
+
+
