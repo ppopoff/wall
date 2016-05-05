@@ -1,4 +1,8 @@
 #!/usr/bin/env escript
+%% @author Paul Popoff
+%% @version 0.2
+%% @title A client application for wall-server
+%%
 -module(wall_client).
 -mode(compile).
 
@@ -10,6 +14,8 @@
 -define(PORT, 8000).
 
 
+%% @doc
+%% @hidden
 %% An entry point to the application
 main(Username) ->
     Socket = connect(),
@@ -19,7 +25,8 @@ main(Username) ->
 
     %% Wait for user input and if it happens
     %% send it to the socket controlling process
-    repl(Pid).
+    repl(Pid),
+    ok.
 
 
 
@@ -27,9 +34,9 @@ main(Username) ->
 %% to correspond to the given binary format
 %% and then prints the output
 repl(Pid) ->
-  Prompt = ("> "),
-  Pid ! {send, io:get_line(Prompt)},
-  repl(Pid).
+    Prompt = ("> "),
+    Pid ! {send, io:get_line(Prompt)},
+    repl(Pid).
 
 
 start_listener(Socket) ->
@@ -97,24 +104,6 @@ log_in(Username, Socket) ->
     ok.
 
 
-% Message encoding/decoding
-% --------------------------------------------------------
-
--spec encode_message(string()) -> binary().
-encode_message(Message) ->
-    Payload = term_to_binary(Message),
-    PayloadSize = byte_size(Payload),
-
-    Header = case binary:encode_unsigned(PayloadSize, big) of
-                Byte  when byte_size(Byte)  =:=1 -> <<0, 0, Byte/bits>>;
-                Bytes when byte_size(Bytes) =:=2 -> <<0, Bytes/bits>>;
-                Bytes when byte_size(Bytes) =:=3 -> Bytes
-             end,
-
-    <<Header/bits, Payload/bits>>.
-
-
-%% Greets the user
 decode_message("OK") -> "Now post!\n";
 decode_message(Message) when is_list(Message) ->
     decode_message(list_to_binary(Message));
@@ -129,24 +118,33 @@ decode_message(Message) when is_binary(Message) ->
 
 
 
-% Prompt utils
-% --------------------------------------------------------
+%% @doc Encodes the message
+%% @spec encode_message(string()) -> binary()
+-spec encode_message(string()) -> binary().
+encode_message(Message) ->
+    Payload = term_to_binary(Message),
+    PayloadSize = byte_size(Payload),
+    <<PayloadSize:24/unsigned-big-integer, Payload/bits>>.
+
+
+%% @doc prings local time, when message is received
+%% @spec get_prompt() -> string()
 -spec get_prompt() -> string().
 get_prompt() ->
-  "[" ++ localtime_ms() ++"] ".
+  "[" ++ localtime() ++ "] ".
 
 
-% timestamp utils
-% --------------------------------------------------------
--spec localtime_ms() -> string().
-localtime_ms() ->
+%% @doc obtains local time in milliscodns
+%% @spec localtime() -> string()
+-spec localtime() -> string().
+localtime() ->
     {_, _, _Micro} = Now = os:timestamp(),
     {_Date, {Hours, Minutes, Seconds}} = calendar:now_to_local_time(Now),
     to_s(Hours) ++ ":" ++ to_s(Minutes) ++ ":" ++ to_s(Seconds).
 
 
-% utilities
-% ----------------------------------------------------------
+%% @doc Converts given integer to string
+%% @spec to_s(Int::integer()) -> string()
 -spec to_s(integer()) -> string().
 to_s(Int) -> io_lib:format("~p", [Int]).
 
