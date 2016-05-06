@@ -11,8 +11,7 @@ observer:start()
 
 
 IMPROVEMENTS:
-0. Change the message format: use map instead.
-   The map should track: Username, message and, datatime
+0. Set datetime on server and store it inside a map
 1. Change authentication mechanism (use 1 byte for header),
    and the same algoritm as for the message decoding. Use binary to term
 2. Write a proper lager config
