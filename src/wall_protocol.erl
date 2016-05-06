@@ -34,6 +34,7 @@
 
 -type state()   :: #state{}.
 -type message() :: binary().
+-type username() :: string().
 
 
 -define(AUTH_HEADER, 16).
@@ -104,25 +105,22 @@ handle_info({tcp, Socket, Data}, State=#state{auth_status = false}) ->
     end;
 
 
-
-% @doc Receiving the message when user is authenticated
+%% @doc Receiving the message when user is authenticated
 handle_info({tcp, Socket, Data}, State=#state{auth_status=true}) ->
-    lager:info("Waiting for the header"),
     Transport = State#state.transport,
     Buffer    = State#state.buffer,
 
-    %% Append received element to the buffer
+    % Append received element to the buffer
     CurrentBuffer = <<Buffer/binary, Data/binary>>,
 
     % If some data is left it will be kept inside the buffer
-    NewState = decode_data(CurrentBuffer, State),
-
     Transport:setopts(Socket, [{active, once}]),
-    {noreply, NewState, ?TIMEOUT};
+    {noreply, decode_data(CurrentBuffer, State), ?TIMEOUT};
 
 
-% @doc Message broadcasting
-handle_info({broadcast, _Username, Message}, State=#state{auth_status=true}) ->
+%% @doc Message broadcasting
+%% @spec handle_info({broadcast, message()}, state()) -> {noreply, state()}.
+handle_info({broadcast, Message}, State=#state{auth_status=true}) ->
     Transport = State#state.transport,
     Socket    = State#state.socket,
 
@@ -132,35 +130,35 @@ handle_info({broadcast, _Username, Message}, State=#state{auth_status=true}) ->
     {noreply, State};
 
 
-% Cases when server will be stopped
+%% @doc Cases when server will be stopped
 handle_info({tcp_closed, _Socket}, State) ->
     {stop, normal, State};
-
 handle_info({tcp_error, _, Reason}, State) ->
     {stop, Reason, State};
-
 handle_info(timeout, State) ->
     {stop, normal, State};
-
 handle_info(stop, State) ->
     {stop, normal, State};
-
 handle_info(_Info, State) ->
     {stop, normal, State}.
-
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
-% Unknown message accepted
-handle_cast(_Msg, State) ->
+
+%% @doc Handles the unknown messages
+%% @spec handle_cast(message(), state()) -> {noreply, state()}.
+-spec handle_cast(message(), state()) -> {noreply, state()}.
+handle_cast(Message, State) ->
+    lager:info("Unknown message: ~tp", [Message]),
     {noreply, State}.
 
 
+%% @doc Cleans all the resources, removes the entries from ets tables
+%% @spec terminate(any(), state()) -> ok.
+-spec terminate(any(), state()) -> ok.
 terminate(_Reason, _State=#state{auth_status=false, username = <<>>}) ->
     lager:info("Session was terminated, before user logged in."),
     ok;
-
-
 terminate(_Reason, State) ->
     lager:info("Session was terminated"),
     case wall_users:exist(State#state.username) of
@@ -179,7 +177,9 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
-% Registers/reregisters user in the database
+%% @doc Registers/reregisters user in the database
+%% @spec register_user(username(), port(), any(), boolean()) -> {noreply, state()}.
+-spec register_user(username(), port(), any(), boolean()) -> {noreply, state()}.
 register_user(Username, Socket, Transport, FirstTime) ->
     Status = wall_users:reg(Username, self()),
     lager:info(case FirstTime of
@@ -188,27 +188,25 @@ register_user(Username, Socket, Transport, FirstTime) ->
     end, [Status]),
 
     NewState = #state{auth_status=true, username=Username, socket=Socket, transport=Transport},
-    lager:info("returning new state ~tp", [NewState]),
 
     % Message that tells wtherer authentication is successful
     Transport:send(Socket, _AuthSucess = <<"OK">>),
     {noreply, NewState}.
 
 
-
-%% TODO: send user name together with the message
-%% That's why I decode ane encode message on the server side!
-%% Sends broadcast message to all available clients
-notify_other_clients(Username, Message) when is_list(Message) ->
+%% @doc Sends broadcast message to all available clients
+%% @spec notify_other_clients(message()) -> ok.
+-spec notify_other_clients(message()) -> ok.
+notify_other_clients(Message) when is_list(Message) ->
     ActiveClients = wall_users:active_connections_except(self()),
     lager:info("Currently active clients are ~tp", [ActiveClients]),
-    lager:info("Broadcasting: ~tp: ~tp", [Username, Message]),
-    broadcast_message(ActiveClients, Username, encode_message(Message)).
+    broadcast_message(ActiveClients, encode_message(Message)).
 
 
-
-%% Sends a farewell letter to the user,
-%% removes they from database and drops the connection
+%% @doc Sends a farewell letter to the user, removes him or here
+%% from the ets table and drops the connection
+%% @spec notify_and_drop_given_client(username()) -> ok.
+-spec notify_and_drop_given_client(username()) -> ok.
 notify_and_drop_given_client(Username) ->
     [{Username, {Pid, _Timestamp}}] = wall_users:find(Username),
     Message = encode_message(
@@ -219,22 +217,24 @@ notify_and_drop_given_client(Username) ->
     lager:info("Removal status ~tp", [Status]),
 
     % Sends the final message and drops the user
-    broadcast_message([Pid], Username, Message),
-    Pid ! stop.
+    broadcast_message([Pid], Message),
+    Pid ! stop,
+    ok.
 
 
-
-%% @doc Broadcast given message to other users
--spec broadcast_message (list(pid()), string(), binary()) -> ok.
-broadcast_message([], _Username, _Message) ->
+%% @doc Broadcasts given message to other users
+%% @spec broadcast_message (list(pid()), message()) -> ok.
+-spec broadcast_message (list(pid()), message()) -> ok.
+broadcast_message([], _Message) ->
     ok;
-broadcast_message([Pid|Pids], Username, Message) ->
-    Pid ! {broadcast, Username, Message},
-    broadcast_message(Pids, Username, Message).
+broadcast_message([Pid|Pids], Message) ->
+    Pid ! {broadcast, Message},
+    broadcast_message(Pids, Message).
 
 
 %% @doc Encode message to the protocol-friendly format
--spec encode_message(string()) -> binary().
+%% @spec encode_message(string()) -> message().
+-spec encode_message(string()) -> message().
 encode_message(Message) ->
     Payload     = term_to_binary(Message),
     PayloadSize = byte_size(Payload),
@@ -248,8 +248,8 @@ encode_message(Message) ->
     <<Header/binary, Payload/binary>>.
 
 
-% @doc Decodes and handles the message
-% @spec decode_data(message(), state()) -> state().
+%% @doc Decodes and handles the message
+%% @spec decode_data(message(), state()) -> state().
 -spec decode_data(message(), state()) -> state().
 decode_data(Data = <<Size:24/unsigned-big-integer, Rest/binary>>, State) ->
     case byte_size(Rest) >= Size of
@@ -266,12 +266,12 @@ decode_data(Buffer, State) ->
     State#state{buffer=Buffer}.
 
 
-% @doc Decodes and sends the message to other users
-% @spec handle_message(message(), state()) -> ok.
+%% @doc Decodes and sends the message to other users
+%% @spec handle_message(message(), state()) -> ok.
 -spec handle_message(message(), state()) -> ok.
 handle_message(MessageBody, State) ->
     try deserialize(MessageBody) of
-        Message -> notify_other_clients(State#state.username, Message)
+        Message -> notify_other_clients(Message)
     catch
         Exception -> lager:error(
             "Unable to handle message due to it's inappropriate format ~tp", [Exception]
@@ -280,8 +280,8 @@ handle_message(MessageBody, State) ->
     ok.
 
 
-% @doc Deserializes the message's content
-% @spec deserialize(message()) -> term().
+%% @doc Deserializes the message's content
+%% @spec deserialize(message()) -> term().
 -spec deserialize(message()) -> term().
 deserialize(MessageBody) ->
     % throws an exception in case the presentce of atoms
