@@ -7,11 +7,19 @@
 -mode(compile).
 
 -export([start_listener/1, loop/1]).
--export([decode_message/1, encode_message/1]).
+-export([decode_message/1, encode_message/2]).
 
 -define(TIMEOUT, 120000).
 -define(ADDRESS, "localhost").
 -define(PORT, 8000).
+
+
+-record(state, {
+    socket  :: port(),
+    username :: binary()
+}).
+
+-type state() :: #state{}.
 
 
 %% @doc
@@ -19,8 +27,10 @@
 %% An entry point to the application
 main(Username) ->
     Socket = connect(),
-    log_in(Username, Socket),
-    Pid = start_listener(Socket),
+    State = #state{socket = Socket, username = Username},
+
+    log_in(State),
+    Pid = start_listener(State),
     gen_tcp:controlling_process(Socket, Pid),
 
     %% Wait for user input and if it happens
@@ -39,23 +49,33 @@ repl(Pid) ->
     repl(Pid).
 
 
-start_listener(Socket) ->
-    spawn(?MODULE, loop, [Socket]).
+start_listener(State) ->
+    spawn(?MODULE, loop, [State]).
 
 
-loop(Socket) ->
+-spec loop(state()) -> none().
+loop(State=#state{username = Username, socket = Socket}) ->
     receive
         % Message received!
         {tcp, Socket, Data} ->
             inet:setopts(Socket, [{active, once}]),
-            DecodedMessage = decode_message(Data),
-            io:format(get_prompt() ++ "~s", [DecodedMessage]),
-            loop(Socket);
+
+            case Data of
+                "OK" -> io:format("Now post! ~n");
+                BinaryData ->
+                    io:format("Accepted: ~tp ~n", [BinaryData]),
+                    DecodedMessage = decode_message(BinaryData),
+                    {ok, MessageText} = maps:find("m", DecodedMessage),
+                    {ok, User} = maps:find("u", DecodedMessage),
+                    io:format(get_prompt() ++ "~s " ++ "~s", [User, MessageText])
+            end,
+
+            loop(State);
         {send, Message} ->
             inet:setopts(Socket, [{active, once}]),
-            EncodedMessage = encode_message(Message),
+            EncodedMessage = encode_message(Username, Message),
             gen_tcp:send(Socket, EncodedMessage),
-            loop(Socket);
+            loop(State);
         {tcp_error, _, _Reason} ->
             io:format("we're in a deep deep shit"),
             gen_tcp:close(Socket),
@@ -88,11 +108,12 @@ connect(Address, Port) ->
     Socket.
 
 
--spec log_in(string(), port()) -> ok.
-log_in(Username, Socket) ->
+%-spec log_in(tate=#state{username=b}) -> ok.
+log_in(_State=#state{username=Username, socket=Socket}) ->
     BinUname = list_to_binary(Username),
     StrLen = byte_size(BinUname),
 
+    %TODO use different approach to the auth
     Header = case binary:encode_unsigned(StrLen, big) of
                 Byte  when byte_size(Byte)  =:=1 -> <<0, Byte/bits>>;
                 Bytes when byte_size(Bytes) =:=2 -> Bytes
@@ -104,7 +125,8 @@ log_in(Username, Socket) ->
     ok.
 
 
-decode_message("OK") -> "Now post!\n";
+
+%% TODO eliminate this: Accept only binary not a list
 decode_message(Message) when is_list(Message) ->
     decode_message(list_to_binary(Message));
 decode_message(Message) when is_binary(Message) ->
@@ -119,12 +141,13 @@ decode_message(Message) when is_binary(Message) ->
 
 
 %% @doc Encodes the message
-%% @spec encode_message(string()) -> binary()
--spec encode_message(string()) -> binary().
-encode_message(Message) ->
-    Payload = term_to_binary(Message),
-    PayloadSize = byte_size(Payload),
-    <<PayloadSize:24/unsigned-big-integer, Payload/bits>>.
+%% @spec encode_message(string(), string()) -> binary()
+-spec encode_message(string(), string()) -> binary().
+encode_message(Username, Message) ->
+    Payload = #{"m" => Message, "u" => Username},
+    EncodedPayload = term_to_binary(Payload),
+    PayloadSize = byte_size(EncodedPayload),
+    <<PayloadSize:24/unsigned-big-integer, EncodedPayload/bits>>.
 
 
 %% @doc prings local time, when message is received
