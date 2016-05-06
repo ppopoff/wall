@@ -28,11 +28,12 @@
     auth_status = false :: boolean(),
     username = <<>>     :: binary(),
     socket              :: port(),
-    transport           :: any(), %TODO: handle this type
+    transport           :: any(),
     buffer = <<>>       :: binary()
 }).
 
--type state() :: #state{}.
+-type state()   :: #state{}.
+-type message() :: binary().
 
 
 -define(AUTH_HEADER, 16).
@@ -247,15 +248,15 @@ encode_message(Message) ->
     <<Header/binary, Payload/binary>>.
 
 
-% @doc decodes the message and sends it to the user
+% @doc Decodes and handles the message
+% @spec decode_data(message(), state()) -> state().
+-spec decode_data(message(), state()) -> state().
 decode_data(Data = <<Size:24/unsigned-big-integer, Rest/binary>>, State) ->
     case byte_size(Rest) >= Size of
          true  -> % At least one message was received
                <<MessageBody:Size/binary, BytesRem/binary>> = Rest,
-
                handle_message(MessageBody, State),
-
-               % decode other data
+               % decode everything that's left
                decode_data(BytesRem, State#state{buffer=BytesRem});
          false -> % No integral messages received
                % Put Data back into the buffer
@@ -265,20 +266,23 @@ decode_data(Buffer, State) ->
     State#state{buffer=Buffer}.
 
 
-
-% @doc Decodes the message and send it to the other clients
-% @spec
--spec handle_message(binary(), state()) -> ok.
+% @doc Decodes and sends the message to other users
+% @spec handle_message(message(), state()) -> ok.
+-spec handle_message(message(), state()) -> ok.
 handle_message(MessageBody, State) ->
-    % Decode the message
-    DecodedMessage = deserialize(MessageBody),
-    notify_other_clients(State#state.username, DecodedMessage),
+    try deserialize(MessageBody) of
+        Message -> notify_other_clients(State#state.username, Message)
+    catch
+        Exception -> lager:error(
+            "Unable to handle message due to it's inappropriate format ~tp", [Exception]
+        )
+    end,
     ok.
 
 
 % @doc Deserializes the message's content
-% @spec deserialize(binary()) -> term().
--spec deserialize(binary()) -> term().
+% @spec deserialize(message()) -> term().
+-spec deserialize(message()) -> term().
 deserialize(MessageBody) ->
     % throws an exception in case the presentce of atoms
     binary_to_term(MessageBody, [safe]).
