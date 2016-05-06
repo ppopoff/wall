@@ -1,14 +1,20 @@
 {application, wall,
- [
+  [
   {description, "A wall where anyone can post"},
-  {vsn, "0.1.0"},
+  {vsn, "0.1.1"},
   {registered, [wall]},
-  {applications, [
-                  kernel,
+  {applications, [kernel,
                   stdlib,
                   ranch,
-                  lager
-                 ]},
+                  lager]},
   {mod, { wall, []}},
-  {env, []}
- ]}.
+  {env, [{timeout, infinity},
+         {port, 8000},
+         {acceptorsNum, 10}
+       ]},
+
+  {maintainers, ["Paul Popoff"]},
+  {licenses, ["Apache 2.0"]}
+
+  ]
+}.
