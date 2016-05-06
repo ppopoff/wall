@@ -44,19 +44,23 @@
 -define(TIMEOUT, infinity).
 
 
-
+%% @doc initializes and acceptor for the connection
 start_link(Ref, Socket, Transport, Opts) ->
     proc_lib:start_link(?MODULE, init, [Ref, Socket, Transport, Opts]).
 
 
+%% @hidden
+%% @doc It's here to satify gen_server behaviour
 init([]) -> {ok, undefined}.
 
 
+%% @doc stops the acceptor
 stop() ->
     lager:info("Stopping the listener"),
     gen_server:cast(?SERVER, stop).
 
 
+%% @doc Creates connection, and initial state
 init(Ref, Socket, Transport, _Opts = []) ->
     ok = proc_lib:init_ack({ok, self()}),
     ok = ranch:accept_ack(Ref),
@@ -71,7 +75,7 @@ init(Ref, Socket, Transport, _Opts = []) ->
 %% ------------------------------------------------------------------
 
 
-%% This code handles authorization
+%% @doc This code handles authorization
 %% About the authentication protocol:
 %% user sends A message (username)
 %% Message format:
