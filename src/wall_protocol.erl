@@ -24,17 +24,18 @@
 -export([code_change/3]).
 
 
+-type message()  :: binary().
+-type username() :: binary().
+
 -record(state, {
     auth_status = false :: boolean(),
-    username = <<>>     :: binary(),
+    username = <<>>     :: username(),
     socket              :: port(),
     transport           :: any(),
     buffer = <<>>       :: binary()
 }).
 
--type state()   :: #state{}.
--type message() :: binary().
--type username() :: string().
+-type state()    :: #state{}.
 
 
 -define(AUTH_HEADER, 16).
@@ -255,7 +256,7 @@ decode_data(Data = <<Size:24/unsigned-big-integer, Rest/binary>>, State) ->
     case byte_size(Rest) >= Size of
          true  -> % At least one message was received
                <<MessageBody:Size/binary, BytesRem/binary>> = Rest,
-               handle_message(MessageBody, State),
+               handle_message(MessageBody),
                % decode everything that's left
                decode_data(BytesRem, State#state{buffer=BytesRem});
          false -> % No integral messages received
@@ -267,9 +268,9 @@ decode_data(Buffer, State) ->
 
 
 %% @doc Decodes and sends the message to other users
-%% @spec handle_message(message(), state()) -> ok.
--spec handle_message(message(), state()) -> ok.
-handle_message(MessageBody, State) ->
+%% @spec handle_message(message()) -> ok.
+-spec handle_message(message()) -> ok.
+handle_message(MessageBody) ->
     try deserialize(MessageBody) of
         Message -> notify_other_clients(Message)
     catch
