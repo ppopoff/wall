@@ -13,18 +13,13 @@
 %% ===================================================================
 %% Application callbacks
 %% ===================================================================
-%% TODO: Try to use ensure_all_started once
-%% TODO: look at application:start(Application, TYPE) where type is permanent
+%% @doc ensures that all previous applications were started
 run() ->
-    application:ensure_all_started(ranch),
-    application:ensure_all_started(compiler),
-    application:ensure_all_started(syntax_tools),
-    application:ensure_all_started(goldrush),
-    application:ensure_all_started(lager),
     application:ensure_all_started(wall),
     ok.
 
 
+%% @doc starts the appication
 start(_StartType, _StartArgs) ->
     lager:info("Starting the ranch listener"),
 
@@ -36,9 +31,9 @@ start(_StartType, _StartArgs) ->
     end,
 
     lager:info("Application details:"),
-    NumberOfAcceptors = 10,
+    NumberOfAcceptors = get_app_env(acceptorsNum, 10),
     lager:info("Number of acceptors: ~tp", [NumberOfAcceptors]),
-    Port = 8000,
+    Port = get_app_env(port),
     lager:info("Port number: ~tp", [Port]),
     Protocol = wall_protocol,
     Options = [{port, Port}],
@@ -47,21 +42,30 @@ start(_StartType, _StartArgs) ->
         wall_tcp, NumberOfAcceptors, ranch_tcp, Options, Protocol, []).
 
 
+%% @doc stops the application
+%% @spec stop(any()) -> ok.
+-spec stop(any()) -> ok.
 stop(_State) ->
     lager:info("Stopping the ranch listener"),
     ranch:stop_listener(wall_tcp),
     lager:info("Shutting down the application"),
     ok.
 
+
+%% @doc stops the current application
+%% @spec shutdown() -> ok | {error, Reason}
+-spec shutdown() -> ok | {error, any()}.
 shutdown() ->
     application:stop(wall).
 
 
+%% @hidden
 %% @doc return a config value
 get_app_env(Key) ->
     get_app_env(Key, undefined).
 
 
+%% @hidden
 %% @doc return a config value
 get_app_env(Key, DefaultValue) ->
     case application:get_env(wall, Key) of
