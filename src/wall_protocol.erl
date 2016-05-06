@@ -23,8 +23,8 @@
 -export([terminate/2]).
 -export([code_change/3]).
 
-
--type message()  :: binary().
+% TODO: make type more concreete
+-type message()  :: map().
 -type username() :: binary().
 
 -record(state, {
@@ -198,7 +198,7 @@ register_user(Username, Socket, Transport, FirstTime) ->
 %% @doc Sends broadcast message to all available clients
 %% @spec notify_other_clients(message()) -> ok.
 -spec notify_other_clients(message()) -> ok.
-notify_other_clients(Message) when is_list(Message) ->
+notify_other_clients(Message) when is_map(Message) ->
     ActiveClients = wall_users:active_connections_except(self()),
     lager:info("Currently active clients are ~tp", [ActiveClients]),
     broadcast_message(ActiveClients, encode_message(Message)).
