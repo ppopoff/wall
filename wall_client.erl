@@ -63,11 +63,11 @@ loop(State=#state{username = Username, socket = Socket}) ->
             case Data of
                 "OK" -> io:format("Now post! ~n");
                 BinaryData ->
-                    io:format("Accepted: ~tp ~n", [BinaryData]),
                     DecodedMessage = decode_message(BinaryData),
                     {ok, MessageText} = maps:find("m", DecodedMessage),
-                    {ok, User} = maps:find("u", DecodedMessage),
-                    io:format(get_prompt() ++ "~s " ++ "~s", [User, MessageText])
+                    {ok, DateTime} = maps:find("t", DecodedMessage),
+                    {ok, SenderName} = maps:find("u", DecodedMessage),
+                    io:format(pretty_print(DateTime, SenderName, MessageText))
             end,
 
             loop(State);
@@ -150,22 +150,28 @@ encode_message(Username, Message) ->
     <<PayloadSize:24/unsigned-big-integer, EncodedPayload/bits>>.
 
 
+-spec pretty_print(any(), string(), string()) -> string().
+pretty_print(DateTime, SenderName, Text) ->
+    get_prompt(DateTime, SenderName) ++ Text.
+
+
 %% @doc prings local time, when message is received
-%% @spec get_prompt() -> string()
--spec get_prompt() -> string().
-get_prompt() ->
-  "[" ++ localtime() ++ "] ".
+%% @spec get_prompt(any(), string()) -> string().
+-spec get_prompt(any(), string()) -> string().
+get_prompt(DateTime, SenderName) ->
+  "[" ++ format_datetime(DateTime) ++ "] " ++ SenderName ++ ": ".
 
+%TODO specify datetime format as a type
 
-%% @doc obtains local time in milliscodns
-%% @spec localtime() -> string()
--spec localtime() -> string().
-localtime() ->
-    {_, _, _Micro} = Now = os:timestamp(),
-    {_Date, {Hours, Minutes, Seconds}} = calendar:now_to_local_time(Now),
+%% @doc Formats given datetime object
+%% @spec format_datetime(any()) -> string()
+-spec format_datetime(any()) -> string().
+format_datetime(LocalTime) ->
+    {_Date, {Hours, Minutes, Seconds}} = LocalTime,
     to_s(Hours) ++ ":" ++ to_s(Minutes) ++ ":" ++ to_s(Seconds).
 
 
+%TODO: support 2digit formats
 %% @doc Converts given integer to string
 %% @spec to_s(Int::integer()) -> string()
 -spec to_s(integer()) -> string().
