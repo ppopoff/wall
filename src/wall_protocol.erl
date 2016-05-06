@@ -272,13 +272,22 @@ decode_data(Buffer, State) ->
 -spec handle_message(message()) -> ok.
 handle_message(MessageBody) ->
     try deserialize(MessageBody) of
-        Message -> notify_other_clients(Message)
+        Message -> notify_other_clients(add_timestamp_to_message(Message))
     catch
         Exception -> lager:error(
             "Unable to handle message due to it's inappropriate format ~tp", [Exception]
         )
     end,
     ok.
+
+
+%% @doc Adds server timestamp to the given message
+%% @spec add_timestamp_to_message(message()) -> message().
+-spec add_timestamp_to_message(message()) -> message().
+add_timestamp_to_message(MessageBody) ->
+    Now = os:timestamp(),
+    LocalTime = calendar:now_to_local_time(Now),
+    maps:put("t", LocalTime, MessageBody).
 
 
 %% @doc Deserializes the message's content
