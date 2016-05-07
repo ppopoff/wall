@@ -1,5 +1,3 @@
-%%% -*- erlang -*-
-
 -module(wall_protocol).
 -behaviour(gen_server).
 -behaviour(ranch_protocol).
@@ -23,19 +21,19 @@
 -export([terminate/2]).
 -export([code_change/3]).
 
-% TODO: make type more concreete
 -type message()  :: map().
 -type username() :: binary().
 
 -record(state, {
     auth_status = false :: boolean(),
+    was_dropped = false :: boolean(),
     username = <<>>     :: username(),
     socket              :: port(),
     transport           :: any(),
     buffer = <<>>       :: binary()
 }).
 
--type state()    :: #state{}.
+-type state() :: #state{}.
 
 
 -define(AUTH_HEADER, 16).
@@ -102,11 +100,10 @@ handle_info({tcp, Socket, Data}, State=#state{auth_status = false}) ->
     case wall_users:exist(Username) of
         true ->
             lager:info("The specified user exist. Dropping that user..."),
-            notify_and_drop_given_client(Username),
-            register_user(Username, Socket, Transport, true);
+            reregister_user(Username, Socket, Transport);
         false ->
             lager:info("no such user exist. Creating..."),
-            register_user(Username, Socket, Transport, false)
+            register_user(Username, Socket, Transport)
     end;
 
 
@@ -142,10 +139,14 @@ handle_info({tcp_error, _, Reason}, State) ->
     {stop, Reason, State};
 handle_info(timeout, State) ->
     {stop, normal, State};
+handle_info(drop, State) ->
+    {stop, normal, State#state{was_dropped=true}};
 handle_info(stop, State) ->
     {stop, normal, State};
 handle_info(_Info, State) ->
     {stop, normal, State}.
+
+%% @hidden not supprted
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
@@ -164,16 +165,21 @@ handle_cast(Message, State) ->
 terminate(_Reason, _State=#state{auth_status=false, username = <<>>}) ->
     lager:info("Session was terminated, before user logged in."),
     ok;
+terminate(_Reason, _State=#state{auth_status=true, was_dropped=true}) ->
+    lager:info("Connection was dropped."),
+    ok;
 terminate(_Reason, State) ->
     lager:info("Session was terminated"),
     case wall_users:exist(State#state.username) of
         true ->  lager:info("removing the user ~tp", [State#state.username]),
-                 wall_users:del(State#state.username);
+                 wall_users:del(State#state.username),
+                 ok;
         false -> lager:info("No user exist. Safe termination"),
                  ok
     end.
 
 
+%% @hidden not supported
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
@@ -182,20 +188,28 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
-%% @doc Registers/reregisters user in the database
-%% @spec register_user(username(), port(), any(), boolean()) -> {noreply, state()}.
--spec register_user(username(), port(), any(), boolean()) -> {noreply, state()}.
-register_user(Username, Socket, Transport, FirstTime) ->
+%% @doc Registers user in the database
+%% @spec register_user(username(), port(), any()) -> {'noreply', state()}.
+-spec register_user(username(), port(), any()) -> {'noreply', state()}.
+register_user(Username, Socket, Transport) ->
     Status = wall_users:reg(Username, self()),
-    lager:info(case FirstTime of
-        true  -> "New user registred with states ~tp";
-        false -> "Re-registred with new status ~tp"
-    end, [Status]),
+    lager:debug("Registration status ~tp", [Status]),
 
-    NewState = #state{auth_status=true, username=Username, socket=Socket, transport=Transport},
-
-    % Message that tells wtherer authentication is successful
     Transport:send(Socket, _AuthSucess = <<"OK">>),
+    NewState = #state{auth_status=true, username=Username, socket=Socket, transport=Transport},
+    {noreply, NewState}.
+
+
+%% @doc Reregisters user in the database
+%% @spec reregister_user(username(), port(), any()) -> {'noreply', state()}.
+-spec reregister_user(username(), port(), any()) -> {'noreply', state()}.
+reregister_user(Username, Socket, Transport) ->
+    notify_and_drop_given_client(Username),
+    Status = wall_users:rreg(Username, self()),
+    lager:debug("Reregistration status ~tp", [Status]),
+
+    Transport:send(Socket, _AuthSucess = <<"OK">>),
+    NewState = #state{auth_status=true, username=Username, socket=Socket, transport=Transport},
     {noreply, NewState}.
 
 
@@ -204,7 +218,6 @@ register_user(Username, Socket, Transport, FirstTime) ->
 -spec notify_other_clients(message()) -> ok.
 notify_other_clients(Message) when is_map(Message) ->
     ActiveClients = wall_users:active_connections_except(self()),
-    lager:info("Currently active clients are ~tp", [ActiveClients]),
     broadcast_message(ActiveClients, encode_message(Message)).
 
 
@@ -214,16 +227,15 @@ notify_other_clients(Message) when is_map(Message) ->
 -spec notify_and_drop_given_client(username()) -> ok.
 notify_and_drop_given_client(Username) ->
     [{Username, {Pid, _Timestamp}}] = wall_users:find(Username),
-    Message = encode_message(
-        "A new user with following nickname connected. You will be dropped\n"),
 
-    lager:info("Removing the user ~tp", [Username]),
-    Status = wall_users:del(Username),
-    lager:info("Removal status ~tp", [Status]),
+    Message = encode_message(add_timestamp_to_message(#{
+      "m" => "A new user with following nickname connected. You will be dropped\n",
+      "u" => "server"
+    })),
 
     % Sends the final message and drops the user
     broadcast_message([Pid], Message),
-    Pid ! stop,
+    Pid ! drop,
     ok.
 
 
