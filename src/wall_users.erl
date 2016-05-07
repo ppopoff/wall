@@ -10,6 +10,7 @@
 -export([start_link/0]).
 -export([stop/0]).
 -export([reg/2]).
+-export([rreg/2]).
 -export([del/1]).
 -export([exist/1]).
 -export([find/1]).
@@ -29,58 +30,82 @@
 -export([code_change/3]).
 
 
+-record(stats, {
+    users  :: list(pid()),
+    length :: integer()
+}).
+
+-type user()      :: {binary(), pid(), integer()}.
+-type username()  :: binary().
+-type stats()     :: #stats{}.
+-type tab()       :: atom() | any().
+
+
 %% ------------------------------------------------------------------
 %% API Function Definitions
 %% ------------------------------------------------------------------
 
+%% @doc Creates an instance of gen_server
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
 
-% Stops the server
+%% @doc Stops the server
 stop() ->
     gen_server:cast(?SERVER, stop).
 
 
-% Adds user to the ets table
-reg(UserName, Pid) when is_binary(UserName) ->
-    gen_server:call(?SERVER, {reguser, UserName, Pid}).
+%% @doc Adds user to the ets table
+%% @spec reg(Username :: username(), Pid :: pid()) -> ok.
+-spec reg(Username :: binary(), Pid :: pid()) -> ok.
+reg(Username, Pid) ->
+    gen_server:call(?SERVER, {reguser, Username, Pid}).
 
 
-% Removes user from the ets table
--spec del(binary()) -> boolean().
-del(UserName) when is_binary(UserName) ->
-    gen_server:call(?SERVER, {deluser, UserName}).
+%% @doc Updates the user's pid in ets table
+%% @spec rreg(Username :: username(), Pid :: pid()) -> ok.
+-spec rreg(Username :: username(), Pid :: pid()) -> ok.
+rreg(Username, Pid) ->
+    gen_server:call(?SERVER, {rereguser, Username, Pid}).
 
 
-% Checks whether user exist, if so
-% returns true, false otherwise
--spec exist(binary()) -> boolean().
-exist(UserName) when is_binary(UserName)->
-    gen_server:call(?SERVER, {'is registered', UserName}).
+%% @doc Removes user from the ets table
+%% @spec del(binary()) -> boolean().
+-spec del(username()) -> boolean().
+del(Username) ->
+    gen_server:call(?SERVER, {deluser, Username}).
 
 
-% Searches for user in the ets
--spec find(binary()) -> [{binary(), pid(), integer()}].
-find(UserName) ->
-    gen_server:call(?SERVER, {find, UserName}).
+%% @doc Checks whether user exist, if so
+%% @spec exist(binary()) -> boolean().
+-spec exist(username()) -> boolean().
+exist(Username) ->
+    gen_server:call(?SERVER, {'is registered', Username}).
 
 
-% Returns list of all active connections
+%% @doc Searches for user in the ets
+%% @spec find(username()) -> [user()].
+-spec find(username()) -> [user()].
+find(Username) ->
+    gen_server:call(?SERVER, {find, Username}).
+
+
+%% @doc Returns list of all active connections
+%% @spec active_connections() -> [pid()].
 -spec active_connections() -> [pid()].
 active_connections() ->
     gen_server:call(?SERVER, connections).
 
 
-% Returns list of active connections (PIDs), except
-% for given one.
+%% @doc Returns list of active connections (PIDs), except given one
+%% @spec active_connections_except(pid()) -> [pid()].
 -spec active_connections_except(pid()) -> [pid()].
 active_connections_except(Pid) ->
     gen_server:call(?SERVER, {connections_except, Pid}).
 
 
-% Returns the statistic information about the
-% number of users and other details
+%% Returns the statistic information about the
+%% number of users and other details
 stat() ->
     gen_server:call(?SERVER, stat).
 
@@ -89,51 +114,54 @@ stat() ->
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
+%% @doc initializes the internal ets storage
 init([]) ->
-    lager:info("Initializing the user storage..."),
-    lager:info("Creating a table"),
+    lager:debug("Initializing the user storage..."),
     TableId = ets:new(storage, [private, set]),
-    lager:info("Creating a table"),
-    lager:info("this is my table_id: ~tp", [TableId]),
+    lager:debug("Table was created with given id: ~tp", [TableId]),
     {ok, TableId}.
 
 
+%% @doc Cleans up the resorces
+%% @spec terminate(Reason :: any(), TableId :: tab()) -> ok.
+-spec terminate(Reason :: any(), TableId :: tab()) -> ok.
 terminate(Reason, TableId) ->
-    lager:info("Stopping the table service"),
-    lager:info("Deleting the ~tp table", [TableId]),
+    lager:debug("Stopping the storage service: ~tp table will be deleted", [TableId]),
     Status =  ets:delete(TableId),
     lager:info("Done! ~tp", [Status]),
     lager:info("Terminated by following reason: ~tp~n", [Reason]),
     ok.
 
 
-%% This feature is not supported
+%% @hidden This feature is not supported
 handle_info(_Info, TableId) ->
     {noreply, TableId}.
 
 
-%% This feature is not supported
+%% @hidden feature is not supported
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 
 handle_call({'is registered', Username}, _From, TableId) ->
-   {reply, is_registered(ets:lookup(TableId, Username)), TableId};
+    {reply, is_registered(TableId, Username), TableId};
 handle_call(connections, _From, TableId) ->
-   {reply, get_active_connections(TableId), TableId};
+    {reply, get_active_connections(TableId), TableId};
 handle_call({connections_except, Pid}, _From, TableId) ->
-   {reply, get_active_connections_except(TableId, Pid), TableId};
+    {reply, get_active_connections_except(TableId, Pid), TableId};
 handle_call({reguser, Username, Pid}, _From, TableId) ->
-   {reply, register_user(TableId, Username, Pid), TableId};
+    {reply, register_user(TableId, Username, Pid), TableId};
+handle_call({rereguser, Username, Pid}, _From, TableId) ->
+    {reply, reregister_user(TableId, Username, Pid), TableId};
 handle_call({deluser, Username}, _From, TableId) ->
-   {reply, delete_user(TableId, Username), TableId};
+    {reply, delete_user(TableId, Username), TableId};
 handle_call({find, Username}, _From, TableId) ->
     {reply, find_user(TableId, Username), TableId};
 handle_call(stat, _From, TableId) ->
     {reply, get_statistics(TableId), TableId}.
 
 
-%% Stops the server
+%% @doc Stops the server
 handle_cast(stop, TableId) ->
     {stop, normal, TableId}.
 
@@ -142,55 +170,69 @@ handle_cast(stop, TableId) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
-% Defines whether user is registred by
-% results of lookup function
-is_registered([])    -> false;
-is_registered([_])   -> true.
+%% @doc Defines whether user is registred by results of lookup function
+%% @spec is_registered(TableId :: tab(), Username :: username()) -> boolean().
+-spec is_registered(TableId :: tab(), Username :: username()) -> boolean().
+is_registered(TableId, Username) ->
+    case ets:lookup(TableId, Username) of
+        []  -> false;
+        [_] -> true
+    end.
 
 
-% Registers user with given name
-register_user(TableId, UserName, Pid) ->
-    lager:info("Registering a new user..."),
-    RegistrationDate = get_time_millis(os:timestamp()),
-    Status = ets:insert(TableId, {UserName, {Pid, RegistrationDate}}),
-    lager:info("User registration status ~tp", [Status]),
-    lager:info("User ~tp registered ~tp. Acceptor id: ~tp", [UserName, RegistrationDate, Pid]),
-    {ok, UserName, Pid, RegistrationDate}.
+%% @doc Registers user with given name
+%% @spec register_user(TableId :: tab(), Username :: binary(), Pid :: pid()) -> ok.
+-spec register_user(TableId :: tab(), Username :: binary(), Pid :: pid()) -> ok.
+register_user(TableId, Username, Pid) ->
+    Status = ets:insert(TableId, {Username, {Pid, get_registration_date()}}),
+    lager:info("User ~tp pid [~tp] registration status ~tp", [Username, Pid, Status]),
+    ok.
 
 
-% Removes registered user
+%% @doc Registers user with given name
+%% @spec reregister_user(TableId :: tab(), Username :: binary(), NewPid :: pid()) -> ok.
+-spec reregister_user(TableId :: tab(), Username :: binary(), NewPid :: pid()) -> ok.
+reregister_user(TableId, Username, NewPid) ->
+    lager:debug("The same user connected from the different machine..."),
+    delete_user(TableId, Username),
+    lager:debug("Recreating the user in the ets table"),
+    Status = ets:insert_new(TableId, {Username, {NewPid, get_registration_date()}}),
+    lager:info("User ~tp, pid [~tp] re-registration status ~tp", [Username, NewPid, Status]),
+    ok.
+
+
+%% @doc Removes registered user
+%% @spec delete_user(TableId :: any(), Username :: username()) -> ok.
+-spec delete_user(TableId :: tab(), Username :: username()) -> ok.
 delete_user(TableId, Username) ->
-    lager:info("Removing user ~tp from database..", [Username]),
     case ets:delete(TableId, Username) of
-        true ->  lager:info("User was successfully removed"),
+        true ->  lager:info("User ~tp was successfully removed", [Username]),
                  ok;
-        false -> lager:warning("User was not removed"),
+        false -> lager:warning("User ~tp was not removed", [Username]),
                  ok
     end.
 
 
-% Returns name and registration date
-find_user(TableId, UserName) ->
-    lager:info("Searching for user ~tp", [UserName]),
-    ets:lookup(TableId, UserName).
+%% @doc Returns name and registration date
+%% @spec find_user(TableId :: tab(), Username :: username()) -> [user()].
+-spec find_user(TableId :: tab(), Username :: username()) -> [user()].
+find_user(TableId, Username) ->
+    lager:info("Searching for user ~tp", [Username]),
+    ets:lookup(TableId, Username).
 
 
-% retruns a map with user statistics
+%% @doc Retruns a map with user statistics
+%% @spec get_statistics(TableId :: tab()) -> stats().
+-spec get_statistics(TableId :: tab()) -> stats().
 get_statistics(TableId) ->
     lager:info("Statistics for the table"),
     Users = ets:tab2list(TableId),
-    Length = length(Users),
-    {Length, Users}.
+    #stats{length=length(Users), users=Users}.
 
 
-% returns list with active connections
-get_active_connections(TableId) ->
-    lager:info("Retrieving the list of active connections"),
-    Data = ets:tab2list(TableId),
-    Pids = lists:map(fun ({_Uname, {Pid, _RegDate}}) -> Pid end, Data),
-    Pids.
-
-
+%% @doc retrieves a list of active connections without a given one
+%% @spec get_active_connections_except(TableId :: tab(), PidToExclude :: pid()) -> list(pid()).
+-spec get_active_connections_except(TableId :: tab(), PidToExclued :: pid()) -> list(pid()).
 get_active_connections_except(TableId, PidToExclude) ->
     lists:filter(
         fun(Pid) -> Pid =/= PidToExclude end,
@@ -198,7 +240,26 @@ get_active_connections_except(TableId, PidToExclude) ->
      ).
 
 
-% Returns current time (since epoch) in milliseconds
+%% @doc Returns list of all active connections
+%% @spec get_active_connections(tab()) -> list(pid()).
+-spec get_active_connections(TableId :: tab()) -> list(pid()).
+get_active_connections(TableId) ->
+    lager:info("Retrieving the list of active connections"),
+    Data = ets:tab2list(TableId),
+    Pids = lists:map(fun ({_Username, {Pid, _RegDate}}) -> Pid end, Data),
+    Pids.
+
+
+%% @doc Retrieves the registration date
+%% @spec get_registration_date() -> integer().
+-spec get_registration_date() -> integer().
+get_registration_date() ->
+    get_time_millis(os:timestamp()).
+
+
+%% @doc Returns current time (since epoch) in milliseconds
+%% @spec get_time_millis(Now :: integer(), integer(), integer()}) -> integer().
+-spec get_time_millis(Now :: {integer(), integer(), integer()}) -> integer().
 get_time_millis(Now) ->
     {Mega, Sec, Micro} = Now,
     (Mega * 1000000 + Sec) * 1000000 + Micro.
