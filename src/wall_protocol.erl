@@ -1,45 +1,19 @@
+%% Contains the definition of protocol for
+%% wall-chat
 -module(wall_protocol).
+-author(ppopoff).
 -behaviour(gen_server).
 -behaviour(ranch_protocol).
+-include("wall.hrl").
 
-%% ------------------------------------------------------------------
 %% API Function Exports
-%% ------------------------------------------------------------------
+-export([start_link/4, stop/0]).
 
--export([start_link/4]).
--export([stop/0]).
-
-%% ------------------------------------------------------------------
 %% gen_server Function Exports
-%% ------------------------------------------------------------------
-
--export([init/1]).
--export([init/4]).
--export([handle_call/3]).
--export([handle_cast/2]).
--export([handle_info/2]).
--export([terminate/2]).
--export([code_change/3]).
-
--type message()  :: map().
--type username() :: binary().
-
--record(state, {
-    auth_status = false :: boolean(),
-    was_dropped = false :: boolean(),
-    username = <<>>     :: username(),
-    socket              :: port(),
-    transport           :: any(),
-    buffer = <<>>       :: binary()
-}).
-
--type state() :: #state{}.
-
-
--define(AUTH_HEADER, 16).
--define(SERVER, ?MODULE).
--define(HEADER_SIZE, 24). % 3 bytes
--define(TIMEOUT, infinity).
+-export([
+    init/1, init/4, handle_call/3, handle_cast/2,
+    handle_info/2, terminate/2, code_change/3
+]).
 
 
 %% @doc initializes and acceptor for the connection
@@ -47,7 +21,6 @@ start_link(Ref, Socket, Transport, Opts) ->
     proc_lib:start_link(?MODULE, init, [Ref, Socket, Transport, Opts]).
 
 
-%% @hidden
 %% @doc It's here to satify gen_server behaviour
 init([]) -> {ok, undefined}.
 
@@ -60,58 +33,32 @@ stop() ->
 
 %% @doc Creates connection, and initial state
 init(Ref, Socket, Transport, _Opts = []) ->
-    ok = proc_lib:init_ack({ok, self()}),
-    ok = ranch:accept_ack(Ref),
-    ok = Transport:setopts(Socket, [{active, once}]),
-    %% Creating a state for the connection
-    NewState = #state{socket=Socket, transport=Transport},
+    proc_lib:init_ack({ok, self()}),
+    ranch:accept_ack(Ref),
+    Transport:setopts(Socket, [{active, once}]),
+
+    NewState = #state {transport = Transport, auth_status = false, socket = Socket},
     gen_server:enter_loop(?MODULE, [], NewState, ?TIMEOUT).
 
 
-%% ------------------------------------------------------------------
-%% gen_server Function Definitions
-%% ------------------------------------------------------------------
-
-
 %% @doc This code handles authorization
-%% About the authentication protocol:
-%% user sends A message (username)
-%% Message format:
-%% Header: 2 bytes big Endian int (size of payload)
-%% Payload
-%% Client should get the following line in response
-%% 'OK'
-%%
-handle_info({tcp, Socket, Data}, State=#state{auth_status = false}) ->
-    Transport = State#state.transport,
-    Socket    = State#state.socket,
-    HeaderSize = 2,
+handle_info(
+    {tcp, Socket, Data},
+    State = #state {auth_status = false, transport = Transport, buffer = Buffer}
+) ->
+    % Append received element to the buffer
+    CurrentBuffer = <<Buffer/binary, Data/binary>>,
 
-    lager:info("A new user is coming"),
+    % If some data is left it will be kept inside the buffer
     Transport:setopts(Socket, [{active, once}]),
-
-    <<Header:HeaderSize/binary, Rest/binary>> = Data,
-    MessageLen = binary:decode_unsigned(Header),
-
-    <<Username:MessageLen/binary, _Left/binary>> = Rest,
-    lager:info("User with name ~tp is trying to authenticate", [Username]),
-    lager:info("Checking username ~tp in the database", [Username]),
-
-    case wall_users:exist(Username) of
-        true ->
-            lager:info("The specified user exist. Dropping that user..."),
-            reregister_user(Username, Socket, Transport);
-        false ->
-            lager:info("no such user exist. Creating..."),
-            register_user(Username, Socket, Transport)
-    end;
+    {noreply, decode_auth(CurrentBuffer, State), ?TIMEOUT};
 
 
 %% @doc Receiving the message when user is authenticated
-handle_info({tcp, Socket, Data}, State=#state{auth_status=true}) ->
-    Transport = State#state.transport,
-    Buffer    = State#state.buffer,
-
+handle_info(
+    {tcp, Socket, Data},
+    State = #state {auth_status = true, transport = Transport, buffer = Buffer}
+) ->
     % Append received element to the buffer
     CurrentBuffer = <<Buffer/binary, Data/binary>>,
 
@@ -122,10 +69,10 @@ handle_info({tcp, Socket, Data}, State=#state{auth_status=true}) ->
 
 %% @doc Message broadcasting
 %% @spec handle_info({broadcast, message()}, state()) -> {noreply, state()}.
-handle_info({broadcast, Message}, State=#state{auth_status=true}) ->
-    Transport = State#state.transport,
-    Socket    = State#state.socket,
-
+handle_info(
+  {broadcast, Message},
+  State = #state {auth_status = true, transport = Transport, socket = Socket}
+) ->
     Transport:setopts(Socket, [{active, once}]),
     lager:info("To ~tp message: ~tp", [Socket, Message]),
     Transport:send(Socket, Message),
@@ -140,7 +87,7 @@ handle_info({tcp_error, _, Reason}, State) ->
 handle_info(timeout, State) ->
     {stop, normal, State};
 handle_info(drop, State) ->
-    {stop, normal, State#state{was_dropped=true}};
+    {stop, normal, State#state{was_dropped = true}};
 handle_info(stop, State) ->
     {stop, normal, State};
 handle_info(_Info, State) ->
@@ -162,19 +109,18 @@ handle_cast(Message, State) ->
 %% @doc Cleans all the resources, removes the entries from ets tables
 %% @spec terminate(any(), state()) -> ok.
 -spec terminate(any(), state()) -> ok.
-terminate(_Reason, _State=#state{auth_status=false, username = <<>>}) ->
+terminate(_Reason, _State = #state {auth_status = false}) ->
     lager:info("Session was terminated, before user logged in."),
     ok;
-terminate(_Reason, _State=#state{auth_status=true, was_dropped=true}) ->
+terminate(_Reason, _State = #state {auth_status = true, was_dropped = true}) ->
     lager:info("Connection was dropped."),
     ok;
 terminate(_Reason, State) ->
-    lager:info("Session was terminated"),
     case wall_users:exist(State#state.username) of
-        true ->  lager:info("removing the user ~tp", [State#state.username]),
+        true ->  lager:info("Removing the user ~tp", [State#state.username]),
                  wall_users:del(State#state.username),
                  ok;
-        false -> lager:info("No user exist. Safe termination"),
+        false -> lager:info("Session terminated"),
                  ok
     end.
 
@@ -184,33 +130,37 @@ code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 
-%% ------------------------------------------------------------------
-%% Internal Function Definitions
-%% ------------------------------------------------------------------
-
 %% @doc Registers user in the database
-%% @spec register_user(username(), port(), any()) -> {'noreply', state()}.
--spec register_user(username(), port(), any()) -> {'noreply', state()}.
+%% @spec register_user(username(), port(), transport()) -> {'noreply', state()}.
+-spec register_user(username(), port(), transport()) -> {'noreply', state()}.
 register_user(Username, Socket, Transport) ->
     Status = wall_users:reg(Username, self()),
     lager:debug("Registration status ~tp", [Status]),
 
-    Transport:send(Socket, _AuthSucess = <<"OK">>),
-    NewState = #state{auth_status=true, username=Username, socket=Socket, transport=Transport},
-    {noreply, NewState}.
+    Transport:send(Socket, _AuthSuccess = <<"OK">>),
+    {noreply, #state{
+        auth_status = true,  socket = Socket,
+        username = Username, transport = Transport
+    }}.
 
 
 %% @doc Reregisters user in the database
-%% @spec reregister_user(username(), port(), any()) -> {'noreply', state()}.
--spec reregister_user(username(), port(), any()) -> {'noreply', state()}.
+%% @spec reregister_user(username(), port(), transport()) -> {'noreply', state()}.
+-spec reregister_user(username(), port(), transport()) -> {'noreply', state()}.
 reregister_user(Username, Socket, Transport) ->
-    notify_and_drop_given_client(Username),
+    notify_and_drop_given_client(
+        Username,
+        "A new user with following nickname connected. You will be dropped"
+    ),
+
     Status = wall_users:rreg(Username, self()),
     lager:debug("Reregistration status ~tp", [Status]),
 
     Transport:send(Socket, _AuthSucess = <<"OK">>),
-    NewState = #state{auth_status=true, username=Username, socket=Socket, transport=Transport},
-    {noreply, NewState}.
+    {noreply, #state{
+        auth_status = true,  socket = Socket,
+        username = Username, transport = Transport
+    }}.
 
 
 %% @doc Sends broadcast message to all available clients
@@ -218,23 +168,22 @@ reregister_user(Username, Socket, Transport) ->
 -spec notify_other_clients(message()) -> ok.
 notify_other_clients(Message) when is_map(Message) ->
     ActiveClients = wall_users:active_connections_except(self()),
-    broadcast_message(ActiveClients, encode_message(Message)).
+    broadcast_message(ActiveClients, wall_codec:encode_message(Message)).
 
 
-%% @doc Sends a farewell letter to the user, removes him or here
-%% from the ets table and drops the connection
-%% @spec notify_and_drop_given_client(username()) -> ok.
--spec notify_and_drop_given_client(username()) -> ok.
-notify_and_drop_given_client(Username) ->
+%% @doc Sends a farewell to the user, drops and removes them from ets table
+%% @spec notify_and_drop_given_client(username(), Reason :: string()) -> ok.
+-spec notify_and_drop_given_client(username(), Reason :: string()) -> ok.
+notify_and_drop_given_client(Username, Reason) ->
     [{Username, {Pid, _Timestamp}}] = wall_users:find(Username),
+    drop_given_client(Pid, Reason).
 
-    Message = encode_message(add_timestamp_to_message(#{
-      "m" => "A new user with following nickname connected. You will be dropped\n",
-      "u" => "server"
-    })),
 
-    % Sends the final message and drops the user
-    broadcast_message([Pid], Message),
+%% @doc Sends the final message (Reason) and drops the user
+%% @spec drop_given_client(Pid :: pid(), Reason :: string()) -> ok.
+-spec drop_given_client(Pid :: pid(), Reason :: string()) -> ok.
+drop_given_client(Pid, Reason) ->
+    broadcast_message([Pid], wall_utils:message("server", Reason)),
     Pid ! drop,
     ok.
 
@@ -249,26 +198,68 @@ broadcast_message([Pid|Pids], Message) ->
     broadcast_message(Pids, Message).
 
 
-%% @doc Encode message to the protocol-friendly format
-%% @spec encode_message(string()) -> message().
--spec encode_message(string()) -> message().
-encode_message(Message) ->
-    Payload     = term_to_binary(Message),
-    PayloadSize = byte_size(Payload),
 
-    Header = case binary:encode_unsigned(PayloadSize, big) of
-                Byte  when byte_size(Byte)  =:=1 -> <<0, 0, Byte/bits>>;
-                Bytes when byte_size(Bytes) =:=2 -> <<0, Bytes/bits>>;
-                Bytes when byte_size(Bytes) =:=3 -> Bytes
-             end,
+%% @doc decodes the authentication message
+%% @spec decode_auth(message(), state()) -> state().
+-spec decode_auth(message(), state()) -> state().
+decode_auth(
+    Data = <<Size:?HEADER_SIZE/unsigned-big-integer, Rest/binary>>,
+    State = #state{socket = Socket, transport = Transport}
+) ->
+    case byte_size(Rest) >= Size of
+         true  ->
+               <<MessageBody:Size/binary, _BytesRem/binary>> = Rest,
+               handle_auth(MessageBody, Socket, Transport),
 
-    <<Header/binary, Payload/binary>>.
+               % Change server's state (authenticated),
+               % and clean up the buffer
+               State#state{auth_status = true, buffer = <<>>};
+         false -> % No integral messages received
+               % Put Data back into the buffer
+               State#state{buffer=Data}
+    end;
+decode_auth(Buffer, State) ->
+    State#state{buffer=Buffer}.
+
+
+
+%% @doc handles authentication process
+%% @spec handle_auth(message(), port(), transport()) -> ok.
+-spec handle_auth(message(), port(), transport()) -> ok.
+handle_auth(MessageBody, Socket, Transport) ->
+    try wall_utils:deserialize(MessageBody) of
+        Message ->
+            {ok, AuthRequest} = maps:find(?MESSAGE_FIELD, Message),
+            {ok, Username}    = maps:find(?USER_FIELD,    Message),
+
+            lager:info("User with name ~tp is trying to authenticate", [Username]),
+            lager:info("Checking username ~tp in the database", [Username]),
+
+            case wall_users:exist(Username) andalso AuthRequest =:= "auth" of
+                true ->
+                    lager:info("The specified user exist. Dropping that user..."),
+                    reregister_user(Username, Socket, Transport);
+                false ->
+                    case Username of
+                        ""   -> Reason = "Users with empty name are not allowed",
+                                lager:info(Reason),
+                                drop_given_client(self(), Reason);
+                        Name -> lager:info("no such user exist. Creating..."),
+                                register_user(Name, Socket, Transport)
+                    end
+            end
+    catch
+        Exception -> lager:error(
+            "Unable to authenticate the user, because of ~tp", [Exception]
+        )
+    end,
+    ok.
 
 
 %% @doc Decodes and handles the message
 %% @spec decode_data(message(), state()) -> state().
 -spec decode_data(message(), state()) -> state().
-decode_data(Data = <<Size:24/unsigned-big-integer, Rest/binary>>, State) ->
+decode_data(Data = <<Size:?HEADER_SIZE/unsigned-big-integer, Rest/binary>>, State) ->
     case byte_size(Rest) >= Size of
          true  -> % At least one message was received
                <<MessageBody:Size/binary, BytesRem/binary>> = Rest,
@@ -287,29 +278,12 @@ decode_data(Buffer, State) ->
 %% @spec handle_message(message()) -> ok.
 -spec handle_message(message()) -> ok.
 handle_message(MessageBody) ->
-    try deserialize(MessageBody) of
-        Message -> notify_other_clients(add_timestamp_to_message(Message))
+    try wall_utils:deserialize(MessageBody) of
+        Message -> notify_other_clients(
+            wall_utils:add_timestamp(Message))
     catch
         Exception -> lager:error(
-            "Unable to handle message due to it's inappropriate format ~tp", [Exception]
-        )
+            "Unable to handle message due to it's inappropriate format ~tp", [Exception])
     end,
     ok.
-
-
-%% @doc Adds server timestamp to the given message
-%% @spec add_timestamp_to_message(message()) -> message().
--spec add_timestamp_to_message(message()) -> message().
-add_timestamp_to_message(MessageBody) ->
-    Now = os:timestamp(),
-    LocalTime = calendar:now_to_local_time(Now),
-    maps:put("t", LocalTime, MessageBody).
-
-
-%% @doc Deserializes the message's content
-%% @spec deserialize(message()) -> term().
--spec deserialize(message()) -> term().
-deserialize(MessageBody) ->
-    % throws an exception in case the presentce of atoms
-    binary_to_term(MessageBody, [safe]).
 
