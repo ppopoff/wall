@@ -54,21 +54,17 @@ start_listener(State) ->
 
 
 -spec loop(state()) -> none().
-loop(State=#state{username = Username, socket = Socket}) ->
+loop(State = #state{username = Username, socket = Socket}) ->
     receive
         % Message received!
         {tcp, Socket, Data} ->
             inet:setopts(Socket, [{active, once}]),
 
-            case Data of
-                "OK" -> io:format("Now post! ~n");
-                BinaryData ->
-                    DecodedMessage = decode_message(BinaryData),
-                    {ok, MessageText} = maps:find("m", DecodedMessage),
-                    {ok, DateTime} = maps:find("t", DecodedMessage),
-                    {ok, SenderName} = maps:find("u", DecodedMessage),
-                    io:format(pretty_print(DateTime, SenderName, MessageText))
-            end,
+            DecodedMessage = decode_message(Data),
+            {ok, MessageText} = maps:find(<<"m">>, DecodedMessage),
+            {ok, DateTime}    = maps:find(<<"t">>, DecodedMessage),
+            {ok, SenderName}  = maps:find(<<"u">>, DecodedMessage),
+            io:format(pretty_print(DateTime, SenderName, MessageText)),
 
             loop(State);
         {send, Message} ->
@@ -134,14 +130,14 @@ decode_message(Message) when is_binary(Message) ->
 %% @spec encode_message(string(), string()) -> binary()
 -spec encode_message(string(), string()) -> binary().
 encode_message(Username, Message) ->
-    EncodedPayload  = term_to_binary(#{"m" => Message, "u" => Username}),
+    EncodedPayload  = term_to_binary(#{<<"m">> => list_to_binary(Message), <<"u">> => list_to_binary(Username)}),
     PayloadSize     = byte_size(EncodedPayload),
     <<PayloadSize:24/unsigned-big-integer, EncodedPayload/bits>>.
 
 
 -spec pretty_print(any(), string(), string()) -> string().
 pretty_print(DateTime, SenderName, Text) ->
-    get_prompt(DateTime, SenderName) ++ Text.
+    get_prompt(DateTime, binary_to_list(SenderName)) ++ binary_to_list(Text).
 
 
 %% @doc prings local time, when message is received
