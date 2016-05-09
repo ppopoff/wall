@@ -3,19 +3,24 @@
 
 -module(wall_utils).
 -author(ppopoff).
+-include("wall.hrl").
 -export([deserialize/1]).
 -export([add_timestamp/1]).
 -export([message/2]).
 -export([append_newline/1]).
--include("wall.hrl").
+-export([auth_sucess/0]).
 
 
 %% @doc Deserializes the message's content
 %% Trows an exception if atoms are present
-%% @spec deserialize(message()) -> term().
+%% @spec deserialize(MessageBody :: message()) -> term().
 -spec deserialize(message()) -> term().
 deserialize(MessageBody) ->
-    binary_to_term(MessageBody, [safe]).
+    try binary_to_term(MessageBody, [safe]) of
+        Message   -> {ok, Message}
+    catch
+        Exception -> {failed, Exception}
+    end.
 
 
 %% @doc Adds server timestamp to the given message
@@ -28,22 +33,33 @@ add_timestamp(Message) ->
 
 
 %% @doc constructor for the message
+%% @spec message(Username :: binary(), Message :: binary()) -> binary().
 %% @spec message(Username :: string(), Message :: string()) -> binary().
--spec message(Username :: string(), Message :: string()) -> binary().
-message(Username, Message) ->
+-spec message(Username :: binary(), Message :: binary()) -> binary().
+message(Username, Message) when is_binary(Username) andalso is_binary(Message) ->
     wall_codec:encode_message(
         add_timestamp(#{
             ?MESSAGE_FIELD => append_newline(Message),
             ?USER_FIELD    => Username
-    })).
+    }));
+message(Username, Message) when is_list(Username) andalso is_list(Message) ->
+    message(list_to_binary(Username), list_to_binary(Message)).
+
+
+%% @doc Creates a response that will be sent in case of successful
+%% authentication
+%% @spec auth_success() -> binary().
+-spec auth_success() -> binary().
+auth_success() ->
+    message(?FROM_SERVER, ?AUTH_RES).
 
 
 %% @doc Adds newline char at the end of the string if needed
-%% @spec append_newline(string()) -> string().
--spec append_newline(String :: string()) -> string().
+%% @spec append_newline(String :: binary()) -> binary().
+-spec append_newline(String :: binary()) -> binary().
 append_newline(String) ->
-    case lists:last(String) of
-       $\n -> String;
-       _   -> String ++ "\n"
+    case (binary:last(String)) of
+       <<"\n">> -> String;
+       _Char    -> << String/binary, <<"\n">>/binary >>
     end.
 
