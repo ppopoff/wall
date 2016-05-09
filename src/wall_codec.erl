@@ -3,6 +3,7 @@
 -module(wall_codec).
 -author(ppopoff).
 -export([encode_message/1]).
+-export([encode_message/2]).
 -include("wall.hrl").
 
 
@@ -12,15 +13,19 @@
 encode_message(Message) ->
     EncodedPayload = term_to_binary(Message),
     PayloadSize    = byte_size(EncodedPayload),
-    <<PayloadSize:24/unsigned-big-integer, EncodedPayload/bits>>.
+    <<PayloadSize:?HEADER_SIZE/unsigned-big-integer, EncodedPayload/bits>>.
 
 
-%% @doc Encodes the message
+%% @doc Creates the message and encodes it
 %% @spec encode_message(string(), string()) -> binary()
 -spec encode_message(string(), string()) -> binary().
 encode_message(Username, Message) ->
-    EncodedPayload  = term_to_binary(#{"m" => Message, "u" => Username}),
+    EncodedPayload  = term_to_binary(#{
+        ?MESSAGE_FIELD => list_to_binary(Message),
+        ?USER_FIELD    => list_to_binary(Username)
+    }),
+
     PayloadSize     = byte_size(EncodedPayload),
-    <<PayloadSize:24/unsigned-big-integer, EncodedPayload/bits>>.
+    <<PayloadSize:?HEADER_SIZE/unsigned-big-integer, EncodedPayload/bits>>.
 
 
