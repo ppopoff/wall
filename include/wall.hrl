@@ -3,15 +3,17 @@
 -author(ppopoff).
 
 % Message map fields
--define(TIMESTAMP_FIELD, "t").
--define(MESSAGE_FIELD,   "m").
--define(USER_FIELD,      "u").
+-define(TIMESTAMP_FIELD, <<"t">>).
+-define(MESSAGE_FIELD,   <<"m">>).
+-define(USER_FIELD,      <<"u">>).
 
-
--define(SERVER, ?MODULE).
+-define(AUTH_REQ,    <<"auth">>).
+-define(AUTH_RES,    <<"ok">>).
+-define(FROM_SERVER, <<"server">>).
 
 %% Heades size must be 3 bytes long
 -define(HEADER_SIZE, 24).
+-define(BYTE, 8).
 
 %% Default timeout value (for not it's hardcoded)
 -define(TIMEOUT, infinity).
@@ -35,5 +37,4 @@
 }).
 
 -type state() :: #state{}.
-
 
