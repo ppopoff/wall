@@ -92,7 +92,6 @@ loop(State=#state{username = Username, socket = Socket}) ->
 
 % Networing
 % --------------------------------------------------------
-
 -spec connect() -> port().
 connect() ->
     connect(?ADDRESS, ?PORT).
@@ -108,20 +107,11 @@ connect(Address, Port) ->
     Socket.
 
 
-%-spec log_in(tate=#state{username=b}) -> ok.
-log_in(_State=#state{username=Username, socket=Socket}) ->
-    BinUname = list_to_binary(Username),
-    StrLen = byte_size(BinUname),
-
-    %TODO use different approach to the auth
-    Header = case binary:encode_unsigned(StrLen, big) of
-                Byte  when byte_size(Byte)  =:=1 -> <<0, Byte/bits>>;
-                Bytes when byte_size(Bytes) =:=2 -> Bytes
-                % TODO: handle other cases
-             end,
-
-    AuthDetails = <<Header/binary, BinUname/binary>>,
-    gen_tcp:send(Socket, AuthDetails),
+%% @doc Sends authentication request to the server
+%% @spec log_in(state()) -> ok.
+-spec log_in(state()) -> ok.
+log_in(_State=#state{username = Username, socket = Socket}) ->
+    gen_tcp:send(Socket, encode_message(Username, "auth")),
     ok.
 
 
@@ -144,9 +134,8 @@ decode_message(Message) when is_binary(Message) ->
 %% @spec encode_message(string(), string()) -> binary()
 -spec encode_message(string(), string()) -> binary().
 encode_message(Username, Message) ->
-    Payload = #{"m" => Message, "u" => Username},
-    EncodedPayload = term_to_binary(Payload),
-    PayloadSize = byte_size(EncodedPayload),
+    EncodedPayload  = term_to_binary(#{"m" => Message, "u" => Username}),
+    PayloadSize     = byte_size(EncodedPayload),
     <<PayloadSize:24/unsigned-big-integer, EncodedPayload/bits>>.
 
 
