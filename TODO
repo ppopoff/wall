@@ -1,25 +1,20 @@
 Server
 ======
-Tasks:
-- Change authentication mechanism (use 1 byte for header),
-   and the same algoritm as for the message decoding. Use binary to term
+- Enable travis CI
 - Implement unit tests
+- learn how to generate erldocs
+- learn how to use dialyzer and typEr
 
 
 Improvements:
-- Write a proper lager config
-- Add sys.conf and enable it
-- Enable ssl support.
-
+- Write a proper lager config (find out how).
+- Add sys.conf and enable it  (find out how).
+- Enable ssl support          (find out how).
 
 
 Client
 ======
 0. Use gen:server instead of low-level parallel programming
 1. Implement decoding that works the same way as the server
-
-
-
-
 
 
