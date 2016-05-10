@@ -6,9 +6,19 @@
 -behaviour(gen_server).
 -behaviour(ranch_protocol).
 -include("wall.hrl").
-
-
 -define(SERVER, ?MODULE).
+
+% Connection state
+-record(state, {
+    auth_status = false :: boolean(),
+    was_dropped = false :: boolean(),
+    username = <<>>     :: username(),
+    socket              :: port(),
+    transport           :: transport(),
+    buffer = <<>>       :: binary()
+}).
+
+-type state() :: #state{}.
 
 %% API Function Exports
 -export([start_link/4, stop/0]).

@@ -8,6 +8,7 @@
 -define(USER_FIELD,      <<"u">>).
 
 -define(AUTH_REQ,    <<"auth">>).
+-define(AUTH_REQ_S,  "auth").
 -define(AUTH_RES,    <<"ok">>).
 -define(FROM_SERVER, <<"server">>).
 
@@ -25,16 +26,4 @@
 -type username()  :: binary().
 -type transport() :: any().
 
-
-% Connection state
--record(state, {
-    auth_status = false :: boolean(),
-    was_dropped = false :: boolean(),
-    username = <<>>     :: username(),
-    socket              :: port(),
-    transport           :: transport(),
-    buffer = <<>>       :: binary()
-}).
-
--type state() :: #state{}.
 
