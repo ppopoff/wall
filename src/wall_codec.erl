@@ -17,15 +17,13 @@ encode_message(Message) ->
 
 
 %% @doc Creates the message and encodes it
-%% @spec encode_message(string(), string()) -> binary()
--spec encode_message(string(), string()) -> binary().
+%% @spec encode_message(Username :: string(), Message :: string()) -> binary()
+-spec encode_message(Username :: string(), Message :: string()) -> binary().
 encode_message(Username, Message) ->
     EncodedPayload  = term_to_binary(#{
         ?MESSAGE_FIELD => list_to_binary(Message),
         ?USER_FIELD    => list_to_binary(Username)
     }),
-
-    PayloadSize     = byte_size(EncodedPayload),
+    PayloadSize = byte_size(EncodedPayload),
     <<PayloadSize:?HEADER_SIZE/unsigned-big-integer, EncodedPayload/bits>>.
-
 
