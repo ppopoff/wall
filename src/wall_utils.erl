@@ -8,7 +8,7 @@
 -export([add_timestamp/1]).
 -export([message/2]).
 -export([append_newline/1]).
--export([auth_sucess/0]).
+-export([auth_success/0]).
 
 
 %% @doc Deserializes the message's content
