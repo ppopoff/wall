@@ -1,7 +1,5 @@
 Server
 ======
-- Change server's response
-- Make all strings binary
 - Enable travis CI
 - Implement unit tests
 - learn how to generate erldocs
