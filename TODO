@@ -11,10 +11,3 @@ Improvements:
 - Add sys.conf and enable it  (find out how).
 - Enable ssl support          (find out how).
 
-
-Client
-======
-0. Use gen:server instead of low-level parallel programming
-1. Implement decoding that works the same way as the server
-
-
