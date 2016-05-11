@@ -81,7 +81,6 @@ handle_info(
 
 
 %% @doc Message broadcasting
-%% @spec handle_info({broadcast, message()}, state()) -> {noreply, state()}.
 handle_info(
   {broadcast, Message},
   State = #state {auth_status = true, transport = Transport, socket = Socket}
@@ -112,7 +111,6 @@ handle_call(_Request, _From, State) ->
 
 
 %% @doc Handles the unknown messages
-%% @spec handle_cast(message(), state()) -> {noreply, state()}.
 -spec handle_cast(message(), state()) -> {noreply, state()}.
 handle_cast(Message, State) ->
     lager:info("Unknown message: ~tp", [Message]),
@@ -120,7 +118,6 @@ handle_cast(Message, State) ->
 
 
 %% @doc Cleans all the resources, removes the entries from ets tables
-%% @spec terminate(any(), state()) -> ok.
 -spec terminate(any(), state()) -> ok.
 terminate(_Reason, _State = #state {auth_status = false}) ->
     lager:info("Session was terminated, before user logged in.");
@@ -140,7 +137,6 @@ code_change(_OldVsn, State, _Extra) ->
 
 
 %% @doc validates user name
-%% @spec is_valid_username(Username :: username()) -> boolean().
 -spec is_valid_username(Username :: username) -> boolean().
 is_valid_username(<<"">>)       -> false;
 is_valid_username(<<"server">>) -> false;
@@ -149,7 +145,6 @@ is_valid_username(_Username)    -> true.
 
 
 %% @doc Registers user in the database
-%% @spec register_user(username(), port(), transport()) -> {'noreply', state()}.
 -spec register_user(username(), port(), transport()) -> {'noreply', state()}.
 register_user(Username, Socket, Transport) ->
     lager:info("No such user exist. Creating..."),
@@ -164,7 +159,6 @@ register_user(Username, Socket, Transport) ->
 
 
 %% @doc Reregisters user in the database
-%% @spec reregister_user(username(), port(), transport()) -> {'noreply', state()}.
 -spec reregister_user(username(), port(), transport()) -> {'noreply', state()}.
 reregister_user(Username, Socket, Transport) ->
     lager:info("The specified user exist. Dropping..."),
@@ -183,7 +177,6 @@ reregister_user(Username, Socket, Transport) ->
 
 
 %% @doc decodes the authentication message
-%% @spec decode_auth(message(), state()) -> state().
 -spec decode_auth(message(), state()) -> state().
 decode_auth(
     Data = <<Size:?HEADER_SIZE/unsigned-big-integer, Rest/binary>>,
@@ -202,7 +195,6 @@ decode_auth(Buffer, State) ->
 
 
 %% @doc handles authentication process
-%% @spec handle_auth(message(), port(), transport()) -> ok.
 -spec handle_auth(message(), port(), transport()) -> ok.
 handle_auth(MessageBody, Socket, Transport) ->
     case is_auth_successful(MessageBody) of
@@ -217,7 +209,6 @@ handle_auth(MessageBody, Socket, Transport) ->
 
 
 %% @doc if Authentication is successful
-%% @spec is_auth_successful(binary()) -> {true | message()} | {false | any()}.
 -spec is_auth_successful(binary()) -> {true | message()} | {false | any()}.
 is_auth_successful(MessageBody) ->
     case wall_utils:deserialize(MessageBody) of
@@ -236,7 +227,6 @@ is_auth_successful(MessageBody) ->
 
 
 %% @doc Decodes and handles the message
-%% @spec decode_data(message(), state()) -> state().
 -spec decode_data(message(), state()) -> state().
 decode_data(Data = <<Size:?HEADER_SIZE/unsigned-big-integer, Rest/binary>>, State) ->
     case byte_size(Rest) >= Size of
@@ -250,7 +240,6 @@ decode_data(Buffer, State) ->
 
 
 %% @doc Decodes and sends the message to other users
-%% @spec handle_message(message()) -> ok.
 -spec handle_message(message()) -> ok.
 handle_message(MessageBody) ->
     case wall_utils:deserialize(MessageBody) of
@@ -260,7 +249,6 @@ handle_message(MessageBody) ->
 
 
 %% @doc Sends broadcast message to all available clients
-%% @spec notify_other_clients(message()) -> ok.
 -spec notify_other_clients(message()) -> ok.
 notify_other_clients(Message) when is_map(Message) ->
     broadcast_message(
@@ -270,7 +258,6 @@ notify_other_clients(Message) when is_map(Message) ->
 
 
 %% @doc Broadcasts given message to other users
-%% @spec broadcast_message (list(pid()), message()) -> ok.
 -spec broadcast_message (list(pid()), message()) -> ok.
 broadcast_message([], _Message)        -> ok;
 broadcast_message([Pid|Pids], Message) ->
@@ -279,7 +266,6 @@ broadcast_message([Pid|Pids], Message) ->
 
 
 %% @doc Sends a farewell to the user, drops and removes them from ets table
-%% @spec notify_and_drop_given_client(username(), Reason :: string()) -> ok.
 -spec notify_and_drop_given_client(username(), Reason :: string()) -> ok.
 notify_and_drop_given_client(Username, Reason) ->
     [{Username, {Pid, _Timestamp}}] = wall_users:find(Username),
@@ -287,7 +273,6 @@ notify_and_drop_given_client(Username, Reason) ->
 
 
 %% @doc Sends the final message (Reason) and drops the user
-%% @spec drop_given_client(Pid :: pid(), Reason :: string()) -> ok.
 -spec drop_given_client(Pid :: pid(), Reason :: string()) -> ok.
 drop_given_client(Pid, Reason) ->
     broadcast_message([Pid], wall_utils:message("server", Reason)),

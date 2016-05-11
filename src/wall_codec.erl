@@ -8,7 +8,6 @@
 
 
 %% @doc Encodes message to binary
-%% @spec encode_message(message()) -> binary().
 -spec encode_message(Message :: message()) -> binary().
 encode_message(Message) ->
     EncodedPayload = term_to_binary(Message),
@@ -17,7 +16,6 @@ encode_message(Message) ->
 
 
 %% @doc Creates the message and encodes it
-%% @spec encode_message(Username :: string(), Message :: string()) -> binary()
 -spec encode_message(Username :: string(), Message :: string()) -> binary().
 encode_message(Username, Message) ->
     EncodedPayload  = term_to_binary(#{

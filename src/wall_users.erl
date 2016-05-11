@@ -56,49 +56,42 @@ stop() ->
 
 
 %% @doc Adds user to the ets table
-%% @spec reg(Username :: username(), Pid :: pid()) -> ok.
 -spec reg(Username :: binary(), Pid :: pid()) -> ok.
 reg(Username, Pid) ->
     gen_server:call(?SERVER, {reguser, Username, Pid}).
 
 
 %% @doc Updates the user's pid in ets table
-%% @spec rreg(Username :: username(), Pid :: pid()) -> ok.
 -spec rreg(Username :: username(), Pid :: pid()) -> ok.
 rreg(Username, Pid) ->
     gen_server:call(?SERVER, {rereguser, Username, Pid}).
 
 
 %% @doc Removes user from the ets table
-%% @spec del(binary()) -> boolean().
 -spec del(username()) -> boolean().
 del(Username) ->
     gen_server:call(?SERVER, {deluser, Username}).
 
 
 %% @doc Checks whether user exist, if so
-%% @spec exist(binary()) -> boolean().
 -spec exist(username()) -> boolean().
 exist(Username) ->
-    gen_server:call(?SERVER, {'is registered', Username}).
+    gen_server:call(?SERVER, {is_registered, Username}).
 
 
 %% @doc Searches for user in the ets
-%% @spec find(username()) -> [user()].
 -spec find(username()) -> [user()].
 find(Username) ->
     gen_server:call(?SERVER, {find, Username}).
 
 
 %% @doc Returns list of all active connections
-%% @spec active_connections() -> [pid()].
 -spec active_connections() -> [pid()].
 active_connections() ->
     gen_server:call(?SERVER, connections).
 
 
 %% @doc Returns list of active connections (PIDs), except given one
-%% @spec active_connections_except(pid()) -> [pid()].
 -spec active_connections_except(pid()) -> [pid()].
 active_connections_except(Pid) ->
     gen_server:call(?SERVER, {connections_except, Pid}).
@@ -123,7 +116,6 @@ init([]) ->
 
 
 %% @doc Cleans up the resorces
-%% @spec terminate(Reason :: any(), TableId :: tab()) -> ok.
 -spec terminate(Reason :: any(), TableId :: tab()) -> ok.
 terminate(Reason, TableId) ->
     lager:debug("Stopping the storage service: ~tp table will be deleted", [TableId]),
@@ -142,8 +134,8 @@ handle_info(_Info, TableId) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-
-handle_call({'is registered', Username}, _From, TableId) ->
+%% TODO: add specs
+handle_call({is_registered, Username}, _From, TableId) ->
     {reply, is_registered(TableId, Username), TableId};
 handle_call(connections, _From, TableId) ->
     {reply, get_active_connections(TableId), TableId};
@@ -171,7 +163,6 @@ handle_cast(stop, TableId) ->
 %% ------------------------------------------------------------------
 
 %% @doc Defines whether user is registred by results of lookup function
-%% @spec is_registered(TableId :: tab(), Username :: username()) -> boolean().
 -spec is_registered(TableId :: tab(), Username :: username()) -> boolean().
 is_registered(TableId, Username) ->
     case ets:lookup(TableId, Username) of
@@ -181,7 +172,6 @@ is_registered(TableId, Username) ->
 
 
 %% @doc Registers user with given name
-%% @spec register_user(TableId :: tab(), Username :: binary(), Pid :: pid()) -> ok.
 -spec register_user(TableId :: tab(), Username :: binary(), Pid :: pid()) -> ok.
 register_user(TableId, Username, Pid) ->
     Status = ets:insert(TableId, {Username, {Pid, get_registration_date()}}),
@@ -190,7 +180,6 @@ register_user(TableId, Username, Pid) ->
 
 
 %% @doc Registers user with given name
-%% @spec reregister_user(TableId :: tab(), Username :: binary(), NewPid :: pid()) -> ok.
 -spec reregister_user(TableId :: tab(), Username :: binary(), NewPid :: pid()) -> ok.
 reregister_user(TableId, Username, NewPid) ->
     lager:debug("The same user connected from the different machine..."),
@@ -202,7 +191,6 @@ reregister_user(TableId, Username, NewPid) ->
 
 
 %% @doc Removes registered user
-%% @spec delete_user(TableId :: any(), Username :: username()) -> ok.
 -spec delete_user(TableId :: tab(), Username :: username()) -> ok.
 delete_user(TableId, Username) ->
     case ets:delete(TableId, Username) of
@@ -214,7 +202,6 @@ delete_user(TableId, Username) ->
 
 
 %% @doc Returns name and registration date
-%% @spec find_user(TableId :: tab(), Username :: username()) -> [user()].
 -spec find_user(TableId :: tab(), Username :: username()) -> [user()].
 find_user(TableId, Username) ->
     lager:info("Searching for user ~tp", [Username]),
@@ -222,7 +209,6 @@ find_user(TableId, Username) ->
 
 
 %% @doc Retruns a map with user statistics
-%% @spec get_statistics(TableId :: tab()) -> stats().
 -spec get_statistics(TableId :: tab()) -> stats().
 get_statistics(TableId) ->
     lager:info("Statistics for the table"),
@@ -231,7 +217,6 @@ get_statistics(TableId) ->
 
 
 %% @doc retrieves a list of active connections without a given one
-%% @spec get_active_connections_except(TableId :: tab(), PidToExclude :: pid()) -> list(pid()).
 -spec get_active_connections_except(TableId :: tab(), PidToExclued :: pid()) -> list(pid()).
 get_active_connections_except(TableId, PidToExclude) ->
     lists:filter(
@@ -241,7 +226,6 @@ get_active_connections_except(TableId, PidToExclude) ->
 
 
 %% @doc Returns list of all active connections
-%% @spec get_active_connections(tab()) -> list(pid()).
 -spec get_active_connections(TableId :: tab()) -> list(pid()).
 get_active_connections(TableId) ->
     lager:info("Retrieving the list of active connections"),
@@ -251,15 +235,14 @@ get_active_connections(TableId) ->
 
 
 %% @doc Retrieves the registration date
-%% @spec get_registration_date() -> integer().
 -spec get_registration_date() -> integer().
 get_registration_date() ->
     get_time_millis(os:timestamp()).
 
 
 %% @doc Returns current time (since epoch) in milliseconds
-%% @spec get_time_millis(Now :: integer(), integer(), integer()}) -> integer().
 -spec get_time_millis(Now :: {integer(), integer(), integer()}) -> integer().
 get_time_millis(Now) ->
     {Mega, Sec, Micro} = Now,
     (Mega * 1000000 + Sec) * 1000000 + Micro.
+

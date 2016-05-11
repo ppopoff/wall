@@ -9,7 +9,6 @@
 -export([stop/1]).
 
 
-
 %% ===================================================================
 %% Application callbacks
 %% ===================================================================
@@ -43,7 +42,6 @@ start(_StartType, _StartArgs) ->
 
 
 %% @doc stops the application
-%% @spec stop(any()) -> ok.
 -spec stop(any()) -> ok.
 stop(_State) ->
     lager:info("Stopping the ranch listener"),
@@ -53,19 +51,18 @@ stop(_State) ->
 
 
 %% @doc stops the current application
-%% @spec shutdown() -> ok | {error, Reason}
 -spec shutdown() -> ok | {error, any()}.
 shutdown() ->
     application:stop(wall).
 
 
-%% @hidden
+%% @private
 %% @doc return a config value
 get_app_env(Key) ->
     get_app_env(Key, undefined).
 
 
-%% @hidden
+%% @private
 %% @doc return a config value
 get_app_env(Key, DefaultValue) ->
     case application:get_env(wall, Key) of

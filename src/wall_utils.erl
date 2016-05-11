@@ -13,8 +13,7 @@
 
 %% @doc Deserializes the message's content
 %% Trows an exception if atoms are present
-%% @spec deserialize(MessageBody :: message()) -> term().
--spec deserialize(message()) -> term().
+-spec deserialize(MessageBody :: message()) -> term().
 deserialize(MessageBody) ->
     try binary_to_term(MessageBody, [safe]) of
         Message   -> {ok, Message}
@@ -24,7 +23,6 @@ deserialize(MessageBody) ->
 
 
 %% @doc Adds server timestamp to the given message
-%% @spec add_timestamp(Message :: message()) -> message().
 -spec add_timestamp(Message :: message()) -> message().
 add_timestamp(Message) ->
     Now = os:timestamp(),
@@ -33,9 +31,8 @@ add_timestamp(Message) ->
 
 
 %% @doc constructor for the message
-%% @spec message(Username :: binary(), Message :: binary()) -> binary().
-%% @spec message(Username :: string(), Message :: string()) -> binary().
--spec message(Username :: binary(), Message :: binary()) -> binary().
+-spec message(Username :: binary(), Message :: binary()) -> binary()
+    ; message(Username :: string(), Message :: string()) -> binary().
 message(Username, Message) when is_binary(Username) andalso is_binary(Message) ->
     wall_codec:encode_message(
         add_timestamp(#{
@@ -48,14 +45,12 @@ message(Username, Message) when is_list(Username) andalso is_list(Message) ->
 
 %% @doc Creates a response that will be sent in case of successful
 %% authentication
-%% @spec auth_success() -> binary().
 -spec auth_success() -> binary().
 auth_success() ->
     message(?FROM_SERVER, ?AUTH_RES).
 
 
 %% @doc Adds newline char at the end of the string if needed
-%% @spec append_newline(String :: binary()) -> binary().
 -spec append_newline(String :: binary()) -> binary().
 append_newline(String) ->
     case (binary:last(String)) of
