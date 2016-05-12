@@ -9,12 +9,9 @@
 -mode(compile).
 
 -export([start_listener/1, loop/1]).
--export([encode_message/2]).
 
-%-define(TIMEOUT, 120000).
 -define(ADDRESS, "localhost").
 -define(PORT, 8000).
-%-define(HEADER_SIZE, 24).
 
 %% Text colors
 -define(PRMPT_TEXT, "\e[;93m").
@@ -32,6 +29,11 @@
 -type addr()  :: inet:ip_address() | inet:hostname().
 -type sent()  :: ok | {error, closed | inet:posix()}.
 -type localtime() :: any().
+-type message()   :: map().
+-type username()  :: binary().
+-type transport() :: any().
+
+
 
 
 %% @doc
@@ -50,7 +52,7 @@ main(Username) ->
     ok.
 
 
-%% @doc Reads message from STDIN, and sends it
+%% @private @doc Reads message from STDIN, and sends it
 %% to internal process that performs network ops
 repl(Pid) ->
     Pid ! {send, io:get_line(fmt_user_input())},
@@ -63,7 +65,7 @@ start_listener(State) ->
     spawn(?MODULE, loop, [State]).
 
 
-%% @doc Process loop.
+%% @private @doc Process loop.
 -spec loop(state()) -> none().
 loop(State = #state{username = Username, socket = Socket, buffer = Buffer}) ->
     receive
@@ -79,11 +81,9 @@ loop(State = #state{username = Username, socket = Socket, buffer = Buffer}) ->
         %% Tcp error occured
         {tcp_error, _, _Reason} ->
             io:format("tcp error happened"),
-            gen_tcp:close(Socket),
             exit(normal);
         %% Tcp connection closed
         {tcp_closed, _Socket} ->
-            gen_tcp:close(Socket),
             exit(normal);
         %% stop signal was sent
         stop ->
@@ -92,8 +92,7 @@ loop(State = #state{username = Username, socket = Socket, buffer = Buffer}) ->
     end.
 
 
-%% @doc Decodes and handles the message
-%% @spec decode_data(Data :: binary(), State :: state()) -> state().
+%% @private @doc Decodes and handles the message
 -spec decode_data(Data :: binary(), State :: state()) -> state().
 decode_data(Data = <<Size:?HEADER_SIZE/unsigned-big-integer, Rest/binary>>, State) ->
     case byte_size(Rest) >= Size of
@@ -112,8 +111,7 @@ decode_data(Data, State) ->
     State#state{buffer = Data}.
 
 
-%% @doc Handles the received and decoded message
-%% @spec handle_message(BinaryMessage :: binary()) -> ok.
+%% @private @doc Handles the received and decoded message
 -spec handle_message(BinaryMessage :: binary()) -> ok.
 handle_message(BinaryMessage) ->
     DecodedMessage = binary_to_term(BinaryMessage),
@@ -123,22 +121,20 @@ handle_message(BinaryMessage) ->
     io:format(pretty_print(DateTime, SenderName, MessageText)).
 
 
-%% @doc Creates the connections
+%% @private @doc Creates the connections
 -spec connect(Host :: addr(), Port :: integer()) -> port().
 connect(Host, Port) ->
     {ok, Socket} = gen_tcp:connect(Host, Port, [{active, once}, binary]),
     Socket.
 
 
-%% @doc Sends authentication request to the server
-%% @spec log_in(state()) -> ok | {error, Reason}.
+%% @private @doc Sends authentication request to the server
 -spec log_in(state()) -> sent().
 log_in(_State = #state{username = Username, socket = Socket}) ->
     gen_tcp:send(Socket, encode_message(Username, ?AUTH_REQ_S)).
 
 
-%% @doc Sends message to the given socket
-%% @spec send_message(Socket :: port(), Username :: string(), Message :: string()) -> sent().
+%% @private @doc Sends message to the given socket
 -spec send_message(Socket :: port(), Username :: string(), Message :: string()) -> sent().
 send_message(Socket, Username, Message) ->
     inet:setopts(Socket, [{active, once}]),
@@ -146,8 +142,7 @@ send_message(Socket, Username, Message) ->
     gen_tcp:send(Socket, EncodedMessage).
 
 
-%% @doc Creates the message and encodes it.
-%% @spec encode_message(Username :: string(), Message :: string()) -> binary()
+%% @private @doc Creates the message and encodes it.
 -spec encode_message(Username :: string(), Message :: string()) -> binary().
 encode_message(Username, Message) ->
     EncodedPayload  = term_to_binary(#{
@@ -158,35 +153,34 @@ encode_message(Username, Message) ->
     <<PayloadSize:?HEADER_SIZE/unsigned-big-integer, EncodedPayload/bits>>.
 
 
-%% @doc Formats message for the terminal
-%% @spec pretty_print(DateTime:: localtime(), Sender :: binary(), MessageText :: binary()) -> string().
+%% @private @doc Formats message for the terminal
 -spec pretty_print(DateTime :: localtime(), Sender :: binary(), MessageText :: binary()) -> string().
 pretty_print(DateTime, Sender, MessageText) ->
     Text   = binary_to_list(MessageText),
     ?BUDDY_TEXT ++ fmt_prompt(DateTime, Sender) ++ Text ++ ?RESET_TEXT.
 
 
-%% @doc prings local time, when message is received
-%% @spec fmt_prompt(any(), string()) -> string().
+%% @private @doc prings local time, when message is received
 -spec fmt_prompt(DateTime :: localtime(), string()) -> string().
 fmt_prompt(DateTime, SenderName) ->
     Sender = binary_to_list(SenderName),
     "[" ++ fmt_datetime(DateTime) ++ "] " ++ Sender ++ ": ".
 
 
-%% @doc Formats given datetime object
-%% @spec fmt_datetime(LocalTime :: localtime()) -> string()
+%% @private @doc Formats given datetime object
 -spec fmt_datetime(LocalTime :: localtime()) -> string().
 fmt_datetime(LocalTime) ->
     {_Date, {Hours, Minutes, Seconds}} = LocalTime,
     to_s(Hours) ++ ":" ++ to_s(Minutes) ++ ":" ++ to_s(Seconds).
 
+
+%% @private @doc Formats user prompt
+-spec fmt_user_input() -> string().
 fmt_user_input() ->
     ?RESET_TEXT ++ "> " ++ ?PRMPT_TEXT.
 
 
-%% @doc Converts given integer to string with padding == 2:w
-%% @spec to_s(Int :: integer()) -> string()
+%% @private @doc Converts given integer to string with padding == 2:w
 -spec to_s(Int :: integer()) -> string().
 to_s(Int) -> io_lib:format("~2..0B", [Int]).
 
