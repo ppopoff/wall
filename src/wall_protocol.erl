@@ -8,6 +8,17 @@
 -include("wall.hrl").
 -define(SERVER, ?MODULE).
 
+%% API Function Exports
+-export([start_link/4, stop/0]).
+
+%% gen_server Function Exports
+-export([
+    init/1, init/4, handle_call/3, handle_cast/2,
+    handle_info/2, terminate/2, code_change/3
+]).
+
+
+
 % Connection state
 -record(state, {
     auth_status = false :: boolean(),
@@ -18,16 +29,12 @@
     buffer = <<>>       :: binary()
 }).
 
+
 -type state() :: #state{}.
+-type transport() :: any().
+-type username()  :: binary().
+-type message()   :: map().
 
-%% API Function Exports
--export([start_link/4, stop/0]).
-
-%% gen_server Function Exports
--export([
-    init/1, init/4, handle_call/3, handle_cast/2,
-    handle_info/2, terminate/2, code_change/3
-]).
 
 
 %% @doc initializes and acceptor for the connection
