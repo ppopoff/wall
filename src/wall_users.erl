@@ -184,12 +184,8 @@ reregister_user(TableId, Username, NewPid) ->
 %% @doc Removes registered user
 -spec delete_user(TableId :: tab(), Username :: username()) -> ok.
 delete_user(TableId, Username) ->
-    case ets:delete(TableId, Username) of
-        true ->  lager:info("User ~tp was successfully removed", [Username]),
-                 ok;
-        false -> lager:warning("User ~tp was not removed", [Username]),
-                 ok
-    end.
+    ets:delete(TableId, Username),
+    ok.
 
 
 %% @doc Returns name and registration date
