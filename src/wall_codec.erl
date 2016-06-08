@@ -2,9 +2,14 @@
 %%% functions, for the wall protocol
 -module(wall_codec).
 -author(ppopoff).
--export([encode_message/1]).
--export([encode_message/2]).
+-export([encode_message/1, encode_message/2]).
+-export_type([username/0, message/0]).
 -include("wall.hrl").
+
+
+%% Records and types
+-type username()  :: binary().
+-type message()   :: map().
 
 
 %% @doc Encodes message to binary

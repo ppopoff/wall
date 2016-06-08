@@ -19,11 +19,3 @@
 %% Default timeout value (for not it's hardcoded)
 -define(TIMEOUT, infinity).
 
-
-%% Records and types
-
--type message()   :: map().
--type username()  :: binary().
--type transport() :: any().
-
-
