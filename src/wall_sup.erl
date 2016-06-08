@@ -15,9 +15,7 @@
 
 -spec start_link() -> {ok, pid()}.
 start_link() ->
-    lager:info("Supervisor started"),
-
-    % Trap exit signals fromt the children
+    % Trap exit signals from the children
     process_flag(trap_exit,true),
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
