@@ -109,19 +109,14 @@ stat() ->
 
 %% @doc initializes the internal ets storage
 init([]) ->
-    lager:debug("Initializing the user storage..."),
     TableId = ets:new(storage, [private, set]),
-    lager:debug("Table was created with given id: ~tp", [TableId]),
     {ok, TableId}.
 
 
 %% @doc Cleans up the resorces
 -spec terminate(Reason :: any(), TableId :: tab()) -> ok.
 terminate(Reason, TableId) ->
-    lager:debug("Stopping the storage service: ~tp table will be deleted", [TableId]),
     Status =  ets:delete(TableId),
-    lager:info("Done! ~tp", [Status]),
-    lager:info("Terminated by following reason: ~tp~n", [Reason]),
     ok.
 
 
@@ -175,43 +170,33 @@ is_registered(TableId, Username) ->
 -spec register_user(TableId :: tab(), Username :: binary(), Pid :: pid()) -> ok.
 register_user(TableId, Username, Pid) ->
     Status = ets:insert(TableId, {Username, {Pid, get_registration_date()}}),
-    lager:info("User ~tp pid [~tp] registration status ~tp", [Username, Pid, Status]),
     ok.
 
 
 %% @doc Registers user with given name
 -spec reregister_user(TableId :: tab(), Username :: binary(), NewPid :: pid()) -> ok.
 reregister_user(TableId, Username, NewPid) ->
-    lager:debug("The same user connected from the different machine..."),
     delete_user(TableId, Username),
-    lager:debug("Recreating the user in the ets table"),
     Status = ets:insert_new(TableId, {Username, {NewPid, get_registration_date()}}),
-    lager:info("User ~tp, pid [~tp] re-registration status ~tp", [Username, NewPid, Status]),
     ok.
 
 
 %% @doc Removes registered user
 -spec delete_user(TableId :: tab(), Username :: username()) -> ok.
 delete_user(TableId, Username) ->
-    case ets:delete(TableId, Username) of
-        true ->  lager:info("User ~tp was successfully removed", [Username]),
-                 ok;
-        false -> lager:warning("User ~tp was not removed", [Username]),
-                 ok
-    end.
+    ets:delete(TableId, Username),
+    ok.
 
 
 %% @doc Returns name and registration date
 -spec find_user(TableId :: tab(), Username :: username()) -> [user()].
 find_user(TableId, Username) ->
-    lager:info("Searching for user ~tp", [Username]),
     ets:lookup(TableId, Username).
 
 
 %% @doc Retruns a map with user statistics
 -spec get_statistics(TableId :: tab()) -> stats().
 get_statistics(TableId) ->
-    lager:info("Statistics for the table"),
     Users = ets:tab2list(TableId),
     #stats{length=length(Users), users=Users}.
 
