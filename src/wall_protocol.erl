@@ -62,10 +62,9 @@ init(Ref, Socket, Transport, _Opts = []) ->
 
 
 %% @doc This code handles authentication
-handle_info(
-    {tcp, Socket, Data},
-    State = #state {auth_status = false, transport = Transport, buffer = Buffer}
-) ->
+handle_info({tcp, Socket, Data}, State = #state {auth_status = false,
+                                                 transport = Transport,
+                                                 buffer = Buffer}) ->
     % Append received element to the buffer
     CurrentBuffer = <<Buffer/binary, Data/binary>>,
 
@@ -75,10 +74,9 @@ handle_info(
 
 
 %% @doc Receiving the message when user is authenticated
-handle_info(
-    {tcp, Socket, Data},
-    State = #state {auth_status = true, transport = Transport, buffer = Buffer}
-) ->
+handle_info({tcp, Socket, Data}, State = #state {auth_status = true,
+                                                 transport = Transport,
+                                                 buffer = Buffer}) ->
     % Append received element to the buffer
     CurrentBuffer = <<Buffer/binary, Data/binary>>,
 
@@ -88,10 +86,9 @@ handle_info(
 
 
 %% @doc Message broadcasting
-handle_info(
-  {broadcast, Message},
-  State = #state {auth_status = true, transport = Transport, socket = Socket}
-) ->
+handle_info({broadcast, Message}, State = #state {auth_status = true,
+                                                  transport = Transport,
+                                                  socket = Socket}) ->
     Transport:setopts(Socket, [{active, once}]),
     lager:info("To ~tp message: ~tp", [Socket, Message]),
     Transport:send(Socket, Message),
