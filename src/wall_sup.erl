@@ -22,26 +22,9 @@ start_link() ->
 %% ===================================================================
 
 init([]) ->
-    %% means that for each process that dies simply restart that
-    %% process without affecting any of the others
-    RestartStrategy        = one_for_one,
-    MaxRestarts            = 10,
-    MaxTimeBetweenRestarts = 10,
-
-    SupervisorFlags = {
-        RestartStrategy, MaxRestarts, MaxTimeBetweenRestarts
-    },
-
-    ChildSpec = [
-       {
-         storage, % Internal name *used only by supervisor
-         {wall_users, start_link, []}, % function: M/F/A
-         transient, % permanent | temporary
-         infinity,
-         worker, % can be worker | supervisor
-         dynamic
-       }
+    Procs = [
+            {storage, {wall_users, start_link, []},
+                transient, infinity, worker, dynamic}
     ],
-
-    {ok, {SupervisorFlags, ChildSpec}}.
+    {ok, {{one_for_one, 1, 10}, Procs}}.
 
