@@ -95,16 +95,8 @@ handle_info({broadcast, Message}, State = #state {auth_status = true,
 
 
 %% @doc Cases when server will be stopped
-handle_info({tcp_closed, _Socket}, State) ->
-    {stop, normal, State};
-handle_info({tcp_error, _, Reason}, State) ->
-    {stop, Reason, State};
-handle_info(timeout, State) ->
-    {stop, normal, State};
 handle_info(drop, State) ->
     {stop, normal, State#state{was_dropped = true}};
-handle_info(stop, State) ->
-    {stop, normal, State};
 handle_info(_Info, State) ->
     {stop, normal, State}.
 
