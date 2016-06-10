@@ -182,10 +182,8 @@ reregister_user(Username, Socket, Transport) ->
 
 %% @doc decodes the authentication message
 -spec decode_auth(message(), state()) -> state().
-decode_auth(
-    Data = <<Size:?HEADER_SIZE/unsigned-big-integer, Rest/binary>>,
-    State = #state{socket = Socket, transport = Transport}
-) ->
+decode_auth(Data = <<Size:?HEADER_SIZE/unsigned-big-integer, Rest/binary>>,
+            State = #state{socket = Socket, transport = Transport}) ->
     case byte_size(Rest) >= Size of
          true  ->
                <<MessageBody:Size/binary, _BytesRem/binary>> = Rest,
