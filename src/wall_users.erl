@@ -56,13 +56,13 @@ stop() ->
 
 
 %% @doc Adds user to the ets table
--spec reg(Username :: binary(), Pid :: pid()) -> ok.
+-spec reg(binary(), pid()) -> ok.
 reg(Username, Pid) ->
     gen_server:call(?SERVER, {reguser, Username, Pid}).
 
 
 %% @doc Updates the user's pid in ets table
--spec rreg(Username :: username(), Pid :: pid()) -> ok.
+-spec rreg(username(), pid()) -> ok.
 rreg(Username, Pid) ->
     gen_server:call(?SERVER, {rereguser, Username, Pid}).
 
@@ -114,9 +114,9 @@ init([]) ->
 
 
 %% @doc Cleans up the resorces
--spec terminate(Reason :: any(), TableId :: tab()) -> ok.
-terminate(Reason, TableId) ->
-    Status =  ets:delete(TableId),
+-spec terminate(any(), tab()) -> ok.
+terminate(_Reason, TableId) ->
+    ets:delete(TableId),
     ok.
 
 
@@ -129,7 +129,6 @@ handle_info(_Info, TableId) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-%% TODO: add specs
 handle_call({is_registered, Username}, _From, TableId) ->
     {reply, is_registered(TableId, Username), TableId};
 handle_call(connections, _From, TableId) ->
@@ -158,7 +157,7 @@ handle_cast(stop, TableId) ->
 %% ------------------------------------------------------------------
 
 %% @doc Defines whether user is registred by results of lookup function
--spec is_registered(TableId :: tab(), Username :: username()) -> boolean().
+-spec is_registered(tab(), username()) -> boolean().
 is_registered(TableId, Username) ->
     case ets:lookup(TableId, Username) of
         []  -> false;
@@ -167,14 +166,14 @@ is_registered(TableId, Username) ->
 
 
 %% @doc Registers user with given name
--spec register_user(TableId :: tab(), Username :: binary(), Pid :: pid()) -> ok.
+-spec register_user(tab(), binary(), pid()) -> ok.
 register_user(TableId, Username, Pid) ->
     Status = ets:insert(TableId, {Username, {Pid, get_registration_date()}}),
     ok.
 
 
 %% @doc Registers user with given name
--spec reregister_user(TableId :: tab(), Username :: binary(), NewPid :: pid()) -> ok.
+-spec reregister_user(tab(), binary(), pid()) -> ok.
 reregister_user(TableId, Username, NewPid) ->
     delete_user(TableId, Username),
     Status = ets:insert_new(TableId, {Username, {NewPid, get_registration_date()}}),
@@ -182,27 +181,27 @@ reregister_user(TableId, Username, NewPid) ->
 
 
 %% @doc Removes registered user
--spec delete_user(TableId :: tab(), Username :: username()) -> ok.
+-spec delete_user(tab(), username()) -> ok.
 delete_user(TableId, Username) ->
     ets:delete(TableId, Username),
     ok.
 
 
 %% @doc Returns name and registration date
--spec find_user(TableId :: tab(), Username :: username()) -> [user()].
+-spec find_user(tab(), username()) -> [user()].
 find_user(TableId, Username) ->
     ets:lookup(TableId, Username).
 
 
 %% @doc Retruns a map with user statistics
--spec get_statistics(TableId :: tab()) -> stats().
+-spec get_statistics(tab()) -> stats().
 get_statistics(TableId) ->
     Users = ets:tab2list(TableId),
     #stats{length=length(Users), users=Users}.
 
 
 %% @doc retrieves a list of active connections without a given one
--spec get_active_connections_except(TableId :: tab(), PidToExclued :: pid()) -> list(pid()).
+-spec get_active_connections_except(tab(), pid()) -> list(pid()).
 get_active_connections_except(TableId, PidToExclude) ->
     lists:filter(
         fun(Pid) -> Pid =/= PidToExclude end,
@@ -211,7 +210,7 @@ get_active_connections_except(TableId, PidToExclude) ->
 
 
 %% @doc Returns list of all active connections
--spec get_active_connections(TableId :: tab()) -> list(pid()).
+-spec get_active_connections(tab()) -> list(pid()).
 get_active_connections(TableId) ->
     lager:info("Retrieving the list of active connections"),
     Data = ets:tab2list(TableId),
@@ -226,8 +225,7 @@ get_registration_date() ->
 
 
 %% @doc Returns current time (since epoch) in milliseconds
--spec get_time_millis(Now :: {integer(), integer(), integer()}) -> integer().
+-spec get_time_millis({integer(), integer(), integer()}) -> integer().
 get_time_millis(Now) ->
     {Mega, Sec, Micro} = Now,
     (Mega * 1000000 + Sec) * 1000000 + Micro.
-

@@ -13,7 +13,7 @@
 
 %% @doc Deserializes the message's content
 %% Trows an exception if atoms are present
--spec deserialize(MessageBody :: binary()) -> term().
+-spec deserialize(binary()) -> term().
 deserialize(MessageBody) ->
     try binary_to_term(MessageBody, [safe]) of
         Message   -> {ok, Message}
@@ -23,7 +23,7 @@ deserialize(MessageBody) ->
 
 
 %% @doc Adds server timestamp to the given message
--spec add_timestamp(Message :: map()) -> map().
+-spec add_timestamp(map()) -> map().
 add_timestamp(Message) ->
     Now = os:timestamp(),
     LocalTime = calendar:now_to_local_time(Now),
@@ -31,8 +31,8 @@ add_timestamp(Message) ->
 
 
 %% @doc constructor for the message
--spec message(Username :: binary(), Message :: binary()) -> binary()
-           ; (Username :: string(), Message :: string()) -> binary().
+-spec message(binary(), binary()) -> binary()
+           ; (string(), string()) -> binary().
 message(Username, Message) when is_binary(Username) andalso is_binary(Message) ->
     wall_codec:encode_message(
         add_timestamp(#{
@@ -51,7 +51,7 @@ auth_success() ->
 
 
 %% @doc Adds newline char at the end of the string if needed
--spec append_newline(String :: binary()) -> binary().
+-spec append_newline(binary()) -> binary().
 append_newline(String) ->
     case (binary:last(String)) of
        <<"\n">> -> String;

@@ -58,12 +58,14 @@ shutdown() ->
 
 %% @private
 %% @doc return a config value
+-spec get_app_env(any()) -> {any(), undefined}.
 get_app_env(Key) ->
     get_app_env(Key, undefined).
 
 
 %% @private
 %% @doc return a config value
+-spec get_app_env(atom(), any()) -> any().
 get_app_env(Key, DefaultValue) ->
     case application:get_env(wall, Key) of
         {ok, Value} -> Value;

@@ -141,7 +141,7 @@ code_change(_OldVsn, State, _Extra) ->
 
 
 %% @doc validates user name
--spec is_valid_username(Username :: username) -> boolean().
+-spec is_valid_username(username()) -> boolean().
 is_valid_username(<<"">>)       -> false;
 is_valid_username(<<"server">>) -> false;
 is_valid_username(<<"admin">>)  -> false;
@@ -270,14 +270,14 @@ broadcast_message([Pid|Pids], Message) ->
 
 
 %% @doc Sends a farewell to the user, drops and removes them from ets table
--spec notify_and_drop_given_client(username(), Reason :: string()) -> ok.
+-spec notify_and_drop_given_client(username(), string()) -> ok.
 notify_and_drop_given_client(Username, Reason) ->
     [{Username, {Pid, _Timestamp}}] = wall_users:find(Username),
     drop_given_client(Pid, Reason).
 
 
 %% @doc Sends the final message (Reason) and drops the user
--spec drop_given_client(Pid :: pid(), Reason :: string()) -> ok.
+-spec drop_given_client(pid(), string()) -> ok.
 drop_given_client(Pid, Reason) ->
     broadcast_message([Pid], wall_utils:message("server", Reason)),
     Pid ! drop,
