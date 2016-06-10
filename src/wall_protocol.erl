@@ -48,7 +48,6 @@ init([]) -> {ok, undefined}.
 
 %% @doc stops the acceptor
 stop() ->
-    lager:info("Stopping the listener"),
     gen_server:cast(?SERVER, stop).
 
 
