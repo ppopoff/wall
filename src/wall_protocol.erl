@@ -6,7 +6,6 @@
 -behaviour(gen_server).
 -behaviour(ranch_protocol).
 -include("wall.hrl").
--define(SERVER, ?MODULE).
 
 %% API Function Exports
 -export([start_link/4, stop/0]).
@@ -48,7 +47,7 @@ init([]) -> {ok, undefined}.
 
 %% @doc stops the acceptor
 stop() ->
-    gen_server:cast(?SERVER, stop).
+    gen_server:cast(?MODULE, stop).
 
 
 %% @doc Creates connection, and initial state
@@ -236,7 +235,7 @@ decode_data(Buffer, State) ->
 -spec handle_message(message()) -> ok.
 handle_message(MessageBody) ->
     case wall_message:decode(MessageBody) of
-        {ok, Message} -> notify_other_clients(wall_message:add_timestamp(Message));
+        {ok, Message} -> notify_other_clients(wall_message:with_timestamp(Message));
         {failed, _ }  -> lager:info("Message wasn't send due to illegal content")
     end.
 
