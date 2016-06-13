@@ -3,18 +3,15 @@
 -module(wall_message).
 -author(ppopoff).
 -export([new/2, encode/1, encode/2, decode/1]).
--export([add_timestamp/1]).
--export([append_newline/1]).
--export([auth_success/0]).
-
+-export([with_timestamp/1, auth_success/0]).
 
 -export_type([username/0, message/0]).
 -include("wall.hrl").
 
 
 %% Records and types
--type username()  :: binary().
--type message()   :: map().
+-type username() :: binary().
+-type message()  :: map().
 
 
 %% @doc Encodes message to binary
@@ -47,20 +44,12 @@ decode(MessageBody) ->
     end.
 
 
-%% @doc Adds server timestamp to the given message
--spec add_timestamp(map()) -> map().
-add_timestamp(Message) ->
-    Now = os:timestamp(),
-    LocalTime = calendar:now_to_local_time(Now),
-    maps:put(?TIMESTAMP_FIELD, LocalTime, Message).
-
-
 %% @doc constructor for the message
 -spec new(binary(), binary()) -> binary()
        ; (string(), string()) -> binary().
 new(Username, Message) when is_binary(Username) andalso is_binary(Message) ->
     wall_message:encode(
-        add_timestamp(#{
+        with_timestamp(#{
             ?MESSAGE_FIELD => append_newline(Message),
             ?USER_FIELD    => Username
     }));
@@ -75,11 +64,19 @@ auth_success() ->
     new(?FROM_SERVER, ?AUTH_RES).
 
 
-%% @doc Adds newline char at the end of the string if needed
+%% @doc @private Adds newline char at the end of the string if needed
 -spec append_newline(binary()) -> binary().
 append_newline(String) ->
     case (binary:last(String)) of
        <<"\n">> -> String;
        _Char    -> << String/binary, <<"\n">>/binary >>
     end.
+
+
+%% @doc Adds server timestamp to the given message
+-spec with_timestamp(map()) -> map().
+with_timestamp(Message) ->
+    Now = os:timestamp(),
+    LocalTime = calendar:now_to_local_time(Now),
+    maps:put(?TIMESTAMP_FIELD, LocalTime, Message).
 
