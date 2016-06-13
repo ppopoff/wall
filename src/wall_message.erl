@@ -41,7 +41,7 @@ encode(Username, Message) ->
 
 %% @doc Deserializes the message's content
 %% Trows an exception if atoms are present
--spec decode(binary()) -> {ok, message()} | {failed, message()}.
+-spec decode(binary()) -> {ok, message()} | {failed, any()}.
 decode(MessageBody) ->
     try binary_to_term(MessageBody, [safe]) of
         Message   -> {ok, Message}
