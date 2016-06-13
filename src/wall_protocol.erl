@@ -1,11 +1,9 @@
 %% Contains the definition of protocol for
-%% wall-chat
-
+%% the chat program
 -module(wall_protocol).
 -author(ppopoff).
 -behaviour(gen_server).
 -behaviour(ranch_protocol).
--include("wall.hrl").
 
 %% API Function Exports
 -export([start_link/4, stop/0]).
@@ -15,6 +13,10 @@
     init/1, init/4, handle_call/3, handle_cast/2,
     handle_info/2, terminate/2, code_change/3
 ]).
+
+-define(TIMEOUT, infinity).
+-define(HEADER_SIZE, 24).
+-define(USER_FIELD, <<"u">>).
 
 
 
@@ -145,7 +147,7 @@ register_user(Username, Socket, Transport) ->
     Status = wall_users:reg(Username, self()),
     lager:debug("Registration status ~tp", [Status]),
 
-    Transport:send(Socket, wall_message:auth_success()),
+    Transport:send(Socket, wall_message:success()),
     {noreply, #state{
         auth_status = true,  socket = Socket,
         username = Username, transport = Transport
@@ -163,7 +165,7 @@ reregister_user(Username, Socket, Transport) ->
     Status = wall_users:rreg(Username, self()),
     lager:debug("Reregistration status ~tp", [Status]),
 
-    Transport:send(Socket, wall_message:auth_success()),
+    Transport:send(Socket, wall_message:success()),
     {noreply, #state{
         auth_status = true,  socket = Socket,
         username = Username, transport = Transport
