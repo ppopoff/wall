@@ -168,7 +168,7 @@ is_registered(TableId, Username) ->
 %% @doc Registers user with given name
 -spec register_user(tab(), binary(), pid()) -> ok.
 register_user(TableId, Username, Pid) ->
-    Status = ets:insert(TableId, {Username, {Pid, get_registration_date()}}),
+    ets:insert(TableId, {Username, {Pid, get_registration_date()}}),
     ok.
 
 
@@ -176,7 +176,7 @@ register_user(TableId, Username, Pid) ->
 -spec reregister_user(tab(), binary(), pid()) -> ok.
 reregister_user(TableId, Username, NewPid) ->
     delete_user(TableId, Username),
-    Status = ets:insert_new(TableId, {Username, {NewPid, get_registration_date()}}),
+    ets:insert_new(TableId, {Username, {NewPid, get_registration_date()}}),
     ok.
 
 
