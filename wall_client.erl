@@ -5,7 +5,7 @@
 %%
 -module(wall_client).
 -author(ppopoff).
--include("include/wall.hrl").
+
 -mode(compile).
 
 -export([start_listener/1, loop/1]).
@@ -18,6 +18,22 @@
 -define(BUDDY_TEXT, "\e[;91m").
 -define(RESET_TEXT,"\e[0m").
 
+% Message map fields
+-define(TIMESTAMP_FIELD, <<"t">>).
+-define(MESSAGE_FIELD,   <<"m">>).
+-define(USER_FIELD,      <<"u">>).
+
+-define(AUTH_REQ,    <<"auth">>).
+-define(AUTH_REQ_S,  "auth").
+-define(AUTH_RES,    <<"ok">>).
+-define(FROM_SERVER, <<"server">>).
+
+%% Heades size must be 3 bytes long
+-define(HEADER_SIZE, 24).
+-define(BYTE, 8).
+
+%% Default timeout value (for not it's hardcoded)
+-define(TIMEOUT, infinity).
 
 -record(state, {
     socket         :: port(),
