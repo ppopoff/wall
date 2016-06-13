@@ -146,7 +146,7 @@ register_user(Username, Socket, Transport) ->
     Status = wall_users:reg(Username, self()),
     lager:debug("Registration status ~tp", [Status]),
 
-    Transport:send(Socket, wall_utils:auth_success()),
+    Transport:send(Socket, wall_message:auth_success()),
     {noreply, #state{
         auth_status = true,  socket = Socket,
         username = Username, transport = Transport
@@ -164,7 +164,7 @@ reregister_user(Username, Socket, Transport) ->
     Status = wall_users:rreg(Username, self()),
     lager:debug("Reregistration status ~tp", [Status]),
 
-    Transport:send(Socket, wall_utils:auth_success()),
+    Transport:send(Socket, wall_message:auth_success()),
     {noreply, #state{
         auth_status = true,  socket = Socket,
         username = Username, transport = Transport
@@ -204,7 +204,7 @@ handle_auth(MessageBody, Socket, Transport) ->
 %% @doc if Authentication is successful
 -spec is_auth_successful(binary()) -> {true | message()} | {false | any()}.
 is_auth_successful(MessageBody) ->
-    case wall_utils:deserialize(MessageBody) of
+    case wall_message:decode(MessageBody) of
         {ok, Message} ->
             {ok, Username} = maps:find(?USER_FIELD, Message),
             lager:info("User ~tp is authenticating.", [Username]),
@@ -235,8 +235,8 @@ decode_data(Buffer, State) ->
 %% @doc Decodes and sends the message to other users
 -spec handle_message(message()) -> ok.
 handle_message(MessageBody) ->
-    case wall_utils:deserialize(MessageBody) of
-        {ok, Message} -> notify_other_clients(wall_utils:add_timestamp(Message));
+    case wall_message:decode(MessageBody) of
+        {ok, Message} -> notify_other_clients(wall_message:add_timestamp(Message));
         {failed, _ }  -> lager:info("Message wasn't send due to illegal content")
     end.
 
@@ -268,7 +268,7 @@ notify_and_drop_given_client(Username, Reason) ->
 %% @doc Sends the final message (Reason) and drops the user
 -spec drop_given_client(pid(), string()) -> ok.
 drop_given_client(Pid, Reason) ->
-    broadcast_message([Pid], wall_utils:message("server", Reason)),
+    broadcast_message([Pid], wall_message:new("server", Reason)),
     Pid ! drop,
     ok.
 
