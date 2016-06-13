@@ -44,7 +44,6 @@ start(_StartType, _StartArgs) ->
 %% @doc stops the application
 -spec stop(any()) -> ok.
 stop(_State) ->
-    lager:info("Stopping the ranch listener"),
     ranch:stop_listener(wall_tcp),
     lager:info("Shutting down the application"),
     ok.
