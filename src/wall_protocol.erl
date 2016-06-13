@@ -246,7 +246,7 @@ handle_message(MessageBody) ->
 notify_other_clients(Message) when is_map(Message) ->
     broadcast_message(
         wall_users:active_connections_except(self()),
-        wall_codec:encode_message(Message)
+        wall_message:encode(Message)
     ).
 
 

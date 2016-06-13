@@ -34,7 +34,7 @@ add_timestamp(Message) ->
 -spec message(binary(), binary()) -> binary()
            ; (string(), string()) -> binary().
 message(Username, Message) when is_binary(Username) andalso is_binary(Message) ->
-    wall_codec:encode_message(
+    wall_message:encode(
         add_timestamp(#{
             ?MESSAGE_FIELD => append_newline(Message),
             ?USER_FIELD    => Username

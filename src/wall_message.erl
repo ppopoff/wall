@@ -1,8 +1,8 @@
 %%% This module contains decoding and encoding
 %%% functions, for the wall protocol
--module(wall_codec).
+-module(wall_message).
 -author(ppopoff).
--export([encode_message/1, encode_message/2]).
+-export([encode/1, encode/2]).
 -export_type([username/0, message/0]).
 -include("wall.hrl").
 
@@ -14,7 +14,7 @@
 
 %% @doc Encodes message to binary
 -spec encode_message(message()) -> binary().
-encode_message(Message) ->
+encode(Message) ->
     EncodedPayload = term_to_binary(Message),
     PayloadSize    = byte_size(EncodedPayload),
     <<PayloadSize:?HEADER_SIZE/unsigned-big-integer, EncodedPayload/bits>>.
@@ -22,7 +22,7 @@ encode_message(Message) ->
 
 %% @doc Creates the message and encodes it
 -spec encode_message(string(), string()) -> binary().
-encode_message(Username, Message) ->
+encode(Username, Message) ->
     EncodedPayload  = term_to_binary(#{
         ?MESSAGE_FIELD => list_to_binary(Message),
         ?USER_FIELD    => list_to_binary(Username)
