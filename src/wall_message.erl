@@ -13,7 +13,7 @@
 
 
 %% @doc Encodes message to binary
--spec encode_message(message()) -> binary().
+-spec encode(message()) -> binary().
 encode(Message) ->
     EncodedPayload = term_to_binary(Message),
     PayloadSize    = byte_size(EncodedPayload),
@@ -21,7 +21,7 @@ encode(Message) ->
 
 
 %% @doc Creates the message and encodes it
--spec encode_message(string(), string()) -> binary().
+-spec encode(string(), string()) -> binary().
 encode(Username, Message) ->
     EncodedPayload  = term_to_binary(#{
         ?MESSAGE_FIELD => list_to_binary(Message),
