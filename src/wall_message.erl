@@ -2,12 +2,18 @@
 %%% functions, for the wall protocol
 -module(wall_message).
 -author(ppopoff).
--export([new/2, encode/1, encode/2, decode/1]).
--export([with_timestamp/1, auth_success/0]).
+-export([new/2, success/0, encode/1, encode/2, decode/1, with_timestamp/1]).
 
 -export_type([username/0, message/0]).
--include("wall.hrl").
 
+-define(TIMESTAMP_FIELD, <<"t">>).
+-define(MESSAGE_FIELD,   <<"m">>).
+-define(USER_FIELD,      <<"u">>).
+-define(AUTH_RES,    <<"ok">>).
+-define(FROM_SERVER, <<"server">>).
+
+
+-define(HEADER_SIZE, 24).
 
 %% Records and types
 -type username() :: binary().
@@ -35,7 +41,7 @@ encode(Username, Message) ->
 
 %% @doc Deserializes the message's content
 %% Trows an exception if atoms are present
--spec decode(binary()) -> term().
+-spec decode(binary()) -> {ok, message()} | {failed, message()}.
 decode(MessageBody) ->
     try binary_to_term(MessageBody, [safe]) of
         Message   -> {ok, Message}
@@ -48,10 +54,9 @@ decode(MessageBody) ->
 -spec new(binary(), binary()) -> binary()
        ; (string(), string()) -> binary().
 new(Username, Message) when is_binary(Username) andalso is_binary(Message) ->
-    wall_message:encode(
-        with_timestamp(#{
-            ?MESSAGE_FIELD => append_newline(Message),
-            ?USER_FIELD    => Username
+    encode(with_timestamp(#{
+        ?MESSAGE_FIELD => append_newline(Message),
+        ?USER_FIELD    => Username
     }));
 new(Username, Message) when is_list(Username) andalso is_list(Message) ->
     new(list_to_binary(Username), list_to_binary(Message)).
@@ -59,8 +64,8 @@ new(Username, Message) when is_list(Username) andalso is_list(Message) ->
 
 %% @doc Creates a response that will be sent in case of successful
 %% authentication
--spec auth_success() -> binary().
-auth_success() ->
+-spec success() -> binary().
+success() ->
     new(?FROM_SERVER, ?AUTH_RES).
 
 
