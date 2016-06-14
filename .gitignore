@@ -21,3 +21,6 @@ log/*
 
 # Ignore coverage reports
 .eunit/*
+
+# Ignore rebar folder
+.rebar/*
