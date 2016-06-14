@@ -97,9 +97,9 @@ handle_info({broadcast, Message}, State = #state {auth_status = true,
 
 %% @doc Cases when server will be stopped
 handle_info(drop, State) ->
-    {stop, normal, State#state{was_dropped = true}};
+    {stop, {shutdown, user_dropped}, State#state{was_dropped = true}};
 handle_info(_Info, State) ->
-    {stop, normal, State}.
+    {noreply, State}.
 
 %% @hidden not supprted
 handle_call(_Request, _From, State) ->
